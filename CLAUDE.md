@@ -4,6 +4,12 @@ Bot que avisa por Telegram a profesores (principalmente **suplentes**) cuando la
 
 Este proyecto también es portfolio personal (búsqueda laboral en Node.js). Priorizar código claro, tipado, testeado y un README que explique las decisiones.
 
+## Convenciones
+
+- **Idioma**: código, nombres, comentarios, commits y PRs en **inglés**. Mensajes del bot para docentes en **español**.
+- Commits con Conventional Commits (`feat:`, `fix:`, `chore:`, `test:`, `docs:`, `refactor:`).
+- Una rama + PR por paso del plan; nunca commitear directo a `main`.
+
 ## Stack
 
 - **Node.js (LTS) + TypeScript** (strict).
@@ -75,7 +81,7 @@ Devuelve `[{estado, iddetalle, idoferta, ...}]`. Sirve para saber si una oferta 
 
 ### Problemas conocidos
 
-- Hay texto con encoding roto: `cursodivision: "2�B"` (debería ser `2°B`). Normalizar.
+- **Encoding**: la API probablemente responde en **Latin-1 / Windows-1252** sin declararlo, y al leerla como UTF-8 aparece `�` (`2�B`, `ca�uelas`, `TECNOL�GICO`). La web oficial muestra bien los acentos. En el collector, leer la respuesta como bytes y decodificar con `new TextDecoder('windows-1252')` (verificar con un test que `cursodivision` quede `2°B`). Si al final la API devuelve `�` literal, el dato ya viene roto y solo queda normalizar.
 - Los horarios por día no siguen un formato fijo.
 - La API no es oficial ni está documentada. Consultar con baja frecuencia (cada 15–30 min), con un User-Agent identificable, timeouts, reintentos con backoff y tolerancia a cambios de esquema (validar con zod o similar).
 
@@ -112,6 +118,10 @@ Flujo de cada ciclo:
 
 ### UX del bot (requisito de Pablo)
 
+**Principio (actualizado 2026-11-13): voice-first.** El docente no debería tener que navegar menús: toca "Iniciar" una vez y desde ahí configura todo hablando (nota de voz) o escribiendo libre. El bot responde guiando ("Contame por audio qué cargos buscás"). Los botones quedan solo para confirmar ([Confirmar] [Editar]) y como alternativa para quien no quiera hablar. Límites de Telegram: el usuario tiene que tocar Iniciar la primera vez (un bot no puede escribir primero) y tiene que mantener apretado el micrófono para grabar (el bot no puede activar la grabación). Ver "Fase 2".
+
+Flujo alternativo con botones (fallback):
+
 El docente NO escribe comandos ni texto libre para configurar: todo con **botones (inline keyboards)**. Solo escribe `/start`.
 Flujo: /start -> elegir distrito(s) (buscador por texto con sugerencias o lista paginada) -> nivel (botones) -> materias/áreas (botones con las más comunes de ese nivel + buscar) -> turno (M/T/N, multi-selección) -> ¿solo suplencias? (Sí/No) -> resumen con [Confirmar] [Editar].
 Un menú principal persistente con botones: "Mis criterios", "Pausar avisos", "Darme de baja". Cada aviso trae botón "Ver en ABC".
@@ -132,10 +142,32 @@ v2 opcional: Telegram Mini App (formulario web dentro de Telegram) para la carga
 
 ## Plan inicial
 
-1. Scaffold: TS, ESLint/Prettier, Vitest, estructura de carpetas.
+1. Scaffold: TS, ESLint/Prettier, Vitest, estructura de carpetas. ✅
 2. Collector + normalización, con tests sobre `fixtures/oferta-publicada.json`.
 3. Matcher con tests.
 4. DB + scheduler.
-5. Bot de Telegram (crear el bot con @BotFather).
-6. Dockerfile, CI y README.
-7. Prueba piloto en un distrito con 10–20 docentes.
+5. Bot de Telegram conversacional en texto libre (Claude con tool use) + confirmación con botón (crear el bot con @BotFather).
+6. Notas de voz: transcripción (interfaz `Transcriber`).
+7. Dockerfile, CI y README.
+8. Prueba piloto en un distrito con 10–20 docentes.
+9. (Opcional) Menús con botones como alternativa, horarios disponibles, aviso de cambio de estado.
+
+## Asistente conversacional (texto y voz) — pasos 5 y 6
+
+Diferencial frente a otros bots: el docente puede escribir o mandar un audio ("buscame cargos de historia en Tandil, turno mañana") y el bot lo entiende.
+
+Pipeline (no es un agente abierto; es un flujo controlado por código con tool use acotado):
+1. **Voz → texto**: Telegram entrega las notas de voz en OGG/Opus. Claude no recibe audio, así que se transcribe antes con un servicio speech-to-text (p. ej. Whisper vía API o whisper.cpp local). Encapsularlo detrás de una interfaz `Transcriber` para poder cambiar de proveedor.
+2. **Texto → intención + criterios**: Claude API (`@anthropic-ai/sdk`, modelo `claude-opus-5-5`) con tool use y `strict: true`. Herramientas:
+   - `search_offers(criteria)`: consulta Solr en el momento y devuelve las ofertas publicadas que coinciden ("¿qué hay hoy?").
+   - `propose_alert(criteria)`: propone guardar una alerta. **No guarda**: el bot muestra un resumen con botones [Confirmar] [Editar] y recién al confirmar se escribe en SQLite.
+   - `list_options(field, query)`: devuelve valores válidos de distrito/nivel/área (desde facets de Solr) para normalizar "historia" → `HTR`, "mardel" → "GENERAL PUEYRREDON".
+3. Si faltan datos (p. ej. no dijo el distrito), Claude pregunta en vez de inventar.
+4. Validar siempre el `criteria` devuelto contra el esquema (zod) y contra los valores reales antes de usarlo.
+
+Reglas:
+- Los botones de la fase 1 siguen existiendo: la voz es un atajo, no reemplaza la confirmación.
+- Manejar `stop_reason` (incluido `refusal`) y usar el parámetro `fallbacks` del API.
+- No mandar a Claude datos personales de las ofertas (ya se descartan en el collector).
+- `ANTHROPIC_API_KEY` y la key de STT en `.env`.
+- Tests del módulo con respuestas de Claude simuladas (mock), sin llamar a la API en CI.

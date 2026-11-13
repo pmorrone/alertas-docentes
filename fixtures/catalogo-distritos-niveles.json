@@ -1,0 +1,738 @@
+{
+  "generado": "2026-11-13",
+  "fuente": "facets Solr APD (todas las ofertas, 651499 docs)",
+  "distritos": [
+    {
+      "numero": 1,
+      "nombre": "La Plata",
+      "solr": "la plata"
+    },
+    {
+      "numero": 2,
+      "nombre": "Adolfo Alsina",
+      "solr": "adolfo alsina"
+    },
+    {
+      "numero": 3,
+      "nombre": "Alberti",
+      "solr": "alberti"
+    },
+    {
+      "numero": 4,
+      "nombre": "Almirante Brown",
+      "solr": "almirante brown"
+    },
+    {
+      "numero": 5,
+      "nombre": "Avellaneda",
+      "solr": "avellaneda"
+    },
+    {
+      "numero": 6,
+      "nombre": "Ayacucho",
+      "solr": "ayacucho"
+    },
+    {
+      "numero": 7,
+      "nombre": "Azul",
+      "solr": "azul"
+    },
+    {
+      "numero": 8,
+      "nombre": "Bahia Blanca",
+      "solr": "bahia blanca"
+    },
+    {
+      "numero": 9,
+      "nombre": "Balcarce",
+      "solr": "balcarce"
+    },
+    {
+      "numero": 10,
+      "nombre": "Baradero",
+      "solr": "baradero"
+    },
+    {
+      "numero": 11,
+      "nombre": "Arrecifes",
+      "solr": "arrecifes"
+    },
+    {
+      "numero": 12,
+      "nombre": "Bolivar",
+      "solr": "bolivar"
+    },
+    {
+      "numero": 13,
+      "nombre": "Bragado",
+      "solr": "bragado"
+    },
+    {
+      "numero": 14,
+      "nombre": "Brandsen",
+      "solr": "brandsen"
+    },
+    {
+      "numero": 15,
+      "nombre": "Campana",
+      "solr": "campana"
+    },
+    {
+      "numero": 16,
+      "nombre": "Cañuelas",
+      "solr": "cañuelas"
+    },
+    {
+      "numero": 17,
+      "nombre": "Carlos Casares",
+      "solr": "carlos casares"
+    },
+    {
+      "numero": 18,
+      "nombre": "Carlos Tejedor",
+      "solr": "carlos tejedor"
+    },
+    {
+      "numero": 19,
+      "nombre": "Carmen de Areco",
+      "solr": "carmen de areco"
+    },
+    {
+      "numero": 20,
+      "nombre": "Daireaux",
+      "solr": "daireaux"
+    },
+    {
+      "numero": 21,
+      "nombre": "Castelli",
+      "solr": "castelli"
+    },
+    {
+      "numero": 22,
+      "nombre": "Colon",
+      "solr": "colon"
+    },
+    {
+      "numero": 23,
+      "nombre": "Coronel Dorrego",
+      "solr": "coronel dorrego"
+    },
+    {
+      "numero": 24,
+      "nombre": "Coronel Pringles",
+      "solr": "coronel pringles"
+    },
+    {
+      "numero": 25,
+      "nombre": "Coronel Suarez",
+      "solr": "coronel suarez"
+    },
+    {
+      "numero": 26,
+      "nombre": "Chacabuco",
+      "solr": "chacabuco"
+    },
+    {
+      "numero": 27,
+      "nombre": "Chascomus",
+      "solr": "chascomus"
+    },
+    {
+      "numero": 28,
+      "nombre": "Chivilcoy",
+      "solr": "chivilcoy"
+    },
+    {
+      "numero": 29,
+      "nombre": "Dolores",
+      "solr": "dolores"
+    },
+    {
+      "numero": 30,
+      "nombre": "Esteban Echeverria",
+      "solr": "esteban echeverria"
+    },
+    {
+      "numero": 31,
+      "nombre": "Exaltacion de la Cruz",
+      "solr": "exaltacion de la cruz"
+    },
+    {
+      "numero": 32,
+      "nombre": "Florencio Varela",
+      "solr": "florencio varela"
+    },
+    {
+      "numero": 33,
+      "nombre": "General Alvarado",
+      "solr": "general alvarado"
+    },
+    {
+      "numero": 34,
+      "nombre": "General Alvear",
+      "solr": "general alvear"
+    },
+    {
+      "numero": 35,
+      "nombre": "General Arenales",
+      "solr": "general arenales"
+    },
+    {
+      "numero": 36,
+      "nombre": "General Belgrano",
+      "solr": "general belgrano"
+    },
+    {
+      "numero": 37,
+      "nombre": "General Guido",
+      "solr": "general guido"
+    },
+    {
+      "numero": 38,
+      "nombre": "General la Madrid",
+      "solr": "general la madrid"
+    },
+    {
+      "numero": 39,
+      "nombre": "General Lavalle",
+      "solr": "general lavalle"
+    },
+    {
+      "numero": 40,
+      "nombre": "General Madariaga",
+      "solr": "general madariaga"
+    },
+    {
+      "numero": 41,
+      "nombre": "General Paz",
+      "solr": "general paz"
+    },
+    {
+      "numero": 42,
+      "nombre": "General Pinto",
+      "solr": "general pinto"
+    },
+    {
+      "numero": 43,
+      "nombre": "General Pueyrredon",
+      "solr": "general pueyrredon"
+    },
+    {
+      "numero": 44,
+      "nombre": "General Rodriguez",
+      "solr": "general rodriguez"
+    },
+    {
+      "numero": 45,
+      "nombre": "General San Martin",
+      "solr": "general san martin"
+    },
+    {
+      "numero": 47,
+      "nombre": "Zarate",
+      "solr": "zarate"
+    },
+    {
+      "numero": 48,
+      "nombre": "General Viamonte",
+      "solr": "general viamonte"
+    },
+    {
+      "numero": 49,
+      "nombre": "General Villegas",
+      "solr": "general villegas"
+    },
+    {
+      "numero": 50,
+      "nombre": "Gonzales Chaves",
+      "solr": "gonzales chaves"
+    },
+    {
+      "numero": 51,
+      "nombre": "Guamini",
+      "solr": "guamini"
+    },
+    {
+      "numero": 52,
+      "nombre": "Benito Juarez",
+      "solr": "benito juarez"
+    },
+    {
+      "numero": 53,
+      "nombre": "Junin",
+      "solr": "junin"
+    },
+    {
+      "numero": 54,
+      "nombre": "Laprida",
+      "solr": "laprida"
+    },
+    {
+      "numero": 55,
+      "nombre": "Tigre",
+      "solr": "tigre"
+    },
+    {
+      "numero": 56,
+      "nombre": "Las Flores",
+      "solr": "las flores"
+    },
+    {
+      "numero": 57,
+      "nombre": "General las Heras",
+      "solr": "general las heras"
+    },
+    {
+      "numero": 58,
+      "nombre": "Leandro N Alem",
+      "solr": "leandro n alem"
+    },
+    {
+      "numero": 59,
+      "nombre": "Lincoln",
+      "solr": "lincoln"
+    },
+    {
+      "numero": 60,
+      "nombre": "Loberia",
+      "solr": "loberia"
+    },
+    {
+      "numero": 61,
+      "nombre": "Lobos",
+      "solr": "lobos"
+    },
+    {
+      "numero": 62,
+      "nombre": "Lomas de Zamora",
+      "solr": "lomas de zamora"
+    },
+    {
+      "numero": 63,
+      "nombre": "Lujan",
+      "solr": "lujan"
+    },
+    {
+      "numero": 64,
+      "nombre": "Magdalena",
+      "solr": "magdalena"
+    },
+    {
+      "numero": 65,
+      "nombre": "Maipu",
+      "solr": "maipu"
+    },
+    {
+      "numero": 66,
+      "nombre": "Salto",
+      "solr": "salto"
+    },
+    {
+      "numero": 67,
+      "nombre": "Marcos Paz",
+      "solr": "marcos paz"
+    },
+    {
+      "numero": 68,
+      "nombre": "Mar Chiquita",
+      "solr": "mar chiquita"
+    },
+    {
+      "numero": 69,
+      "nombre": "La Matanza",
+      "solr": "la matanza"
+    },
+    {
+      "numero": 70,
+      "nombre": "Mercedes",
+      "solr": "mercedes"
+    },
+    {
+      "numero": 71,
+      "nombre": "Merlo",
+      "solr": "merlo"
+    },
+    {
+      "numero": 72,
+      "nombre": "Monte",
+      "solr": "monte"
+    },
+    {
+      "numero": 73,
+      "nombre": "Moreno",
+      "solr": "moreno"
+    },
+    {
+      "numero": 74,
+      "nombre": "Navarro",
+      "solr": "navarro"
+    },
+    {
+      "numero": 75,
+      "nombre": "Necochea",
+      "solr": "necochea"
+    },
+    {
+      "numero": 76,
+      "nombre": "9 de Julio",
+      "solr": "9 de julio"
+    },
+    {
+      "numero": 77,
+      "nombre": "Olavarria",
+      "solr": "olavarria"
+    },
+    {
+      "numero": 78,
+      "nombre": "Patagones",
+      "solr": "patagones"
+    },
+    {
+      "numero": 79,
+      "nombre": "Pehuajo",
+      "solr": "pehuajo"
+    },
+    {
+      "numero": 80,
+      "nombre": "Pellegrini",
+      "solr": "pellegrini"
+    },
+    {
+      "numero": 81,
+      "nombre": "Pergamino",
+      "solr": "pergamino"
+    },
+    {
+      "numero": 82,
+      "nombre": "Pila",
+      "solr": "pila"
+    },
+    {
+      "numero": 83,
+      "nombre": "Pilar",
+      "solr": "pilar"
+    },
+    {
+      "numero": 84,
+      "nombre": "Puan",
+      "solr": "puan"
+    },
+    {
+      "numero": 85,
+      "nombre": "Quilmes",
+      "solr": "quilmes"
+    },
+    {
+      "numero": 86,
+      "nombre": "Ramallo",
+      "solr": "ramallo"
+    },
+    {
+      "numero": 87,
+      "nombre": "Rauch",
+      "solr": "rauch"
+    },
+    {
+      "numero": 88,
+      "nombre": "Rivadavia",
+      "solr": "rivadavia"
+    },
+    {
+      "numero": 89,
+      "nombre": "Rojas",
+      "solr": "rojas"
+    },
+    {
+      "numero": 90,
+      "nombre": "Roque Perez",
+      "solr": "roque perez"
+    },
+    {
+      "numero": 91,
+      "nombre": "Saavedra",
+      "solr": "saavedra"
+    },
+    {
+      "numero": 92,
+      "nombre": "Saladillo",
+      "solr": "saladillo"
+    },
+    {
+      "numero": 93,
+      "nombre": "San Andres de Giles",
+      "solr": "san  andres de giles"
+    },
+    {
+      "numero": 94,
+      "nombre": "San Antonio de Areco",
+      "solr": "san  antonio de areco"
+    },
+    {
+      "numero": 95,
+      "nombre": "San Fernando",
+      "solr": "san fernando"
+    },
+    {
+      "numero": 96,
+      "nombre": "San Isidro",
+      "solr": "san isidro"
+    },
+    {
+      "numero": 97,
+      "nombre": "San Nicolas",
+      "solr": "san nicolas"
+    },
+    {
+      "numero": 98,
+      "nombre": "San Pedro",
+      "solr": "san pedro"
+    },
+    {
+      "numero": 99,
+      "nombre": "San Vicente",
+      "solr": "san vicente"
+    },
+    {
+      "numero": 100,
+      "nombre": "Moron",
+      "solr": "moron"
+    },
+    {
+      "numero": 101,
+      "nombre": "Suipacha",
+      "solr": "suipacha"
+    },
+    {
+      "numero": 102,
+      "nombre": "Tandil",
+      "solr": "tandil"
+    },
+    {
+      "numero": 103,
+      "nombre": "Tapalque",
+      "solr": "tapalque"
+    },
+    {
+      "numero": 104,
+      "nombre": "Tordillo",
+      "solr": "tordillo"
+    },
+    {
+      "numero": 105,
+      "nombre": "Tornquist",
+      "solr": "tornquist"
+    },
+    {
+      "numero": 106,
+      "nombre": "Trenque Lauquen",
+      "solr": "trenque lauquen"
+    },
+    {
+      "numero": 107,
+      "nombre": "Tres Arroyos",
+      "solr": "tres arroyos"
+    },
+    {
+      "numero": 108,
+      "nombre": "25 de Mayo",
+      "solr": "25 de mayo"
+    },
+    {
+      "numero": 109,
+      "nombre": "Vicente Lopez",
+      "solr": "vicente lopez"
+    },
+    {
+      "numero": 110,
+      "nombre": "Villarino",
+      "solr": "villarino"
+    },
+    {
+      "numero": 111,
+      "nombre": "Lanus",
+      "solr": "lanus"
+    },
+    {
+      "numero": 112,
+      "nombre": "Coronel Rosales",
+      "solr": "coronel rosales"
+    },
+    {
+      "numero": 113,
+      "nombre": "Berisso",
+      "solr": "berisso"
+    },
+    {
+      "numero": 114,
+      "nombre": "Ensenada",
+      "solr": "ensenada"
+    },
+    {
+      "numero": 115,
+      "nombre": "San Cayetano",
+      "solr": "san cayetano"
+    },
+    {
+      "numero": 116,
+      "nombre": "Escobar",
+      "solr": "escobar"
+    },
+    {
+      "numero": 117,
+      "nombre": "Tres de Febrero",
+      "solr": "tres de febrero"
+    },
+    {
+      "numero": 118,
+      "nombre": "Hipolito Irigoyen",
+      "solr": "hipolito irigoyen"
+    },
+    {
+      "numero": 119,
+      "nombre": "Berazategui",
+      "solr": "berazategui"
+    },
+    {
+      "numero": 120,
+      "nombre": "Salliquelo",
+      "solr": "salliquelo"
+    },
+    {
+      "numero": 121,
+      "nombre": "Capitan Sarmiento",
+      "solr": "capitan sarmiento"
+    },
+    {
+      "numero": 123,
+      "nombre": "Partido de la Costa",
+      "solr": "partido de la costa"
+    },
+    {
+      "numero": 124,
+      "nombre": "Pinamar",
+      "solr": "pinamar"
+    },
+    {
+      "numero": 125,
+      "nombre": "Villa Gesell",
+      "solr": "villa gesell"
+    },
+    {
+      "numero": 126,
+      "nombre": "Monte Hermoso",
+      "solr": "monte hermoso"
+    },
+    {
+      "numero": 127,
+      "nombre": "Tres Lomas",
+      "solr": "tres lomas"
+    },
+    {
+      "numero": 128,
+      "nombre": "Florentino Ameghino",
+      "solr": "florentino ameghino"
+    },
+    {
+      "numero": 129,
+      "nombre": "Presidente Peron",
+      "solr": "presidente peron"
+    },
+    {
+      "numero": 130,
+      "nombre": "Ezeiza",
+      "solr": "ezeiza"
+    },
+    {
+      "numero": 131,
+      "nombre": "San Miguel",
+      "solr": "san miguel"
+    },
+    {
+      "numero": 132,
+      "nombre": "Jose C. Paz",
+      "solr": "jose c. paz"
+    },
+    {
+      "numero": 133,
+      "nombre": "Malvinas Argentinas",
+      "solr": "malvinas argentinas"
+    },
+    {
+      "numero": 134,
+      "nombre": "Punta Indio",
+      "solr": "punta indio"
+    },
+    {
+      "numero": 135,
+      "nombre": "Hurlingham",
+      "solr": "hurlingham"
+    },
+    {
+      "numero": 136,
+      "nombre": "Ituzaingo",
+      "solr": "ituzaingo"
+    },
+    {
+      "numero": 137,
+      "nombre": "Lezama",
+      "solr": "lezama"
+    }
+  ],
+  "niveles": [
+    {
+      "nombre": "Adultos y CENS",
+      "solr": "adultos y cens",
+      "ofertas_historicas": 43713
+    },
+    {
+      "nombre": "Artistica",
+      "solr": "artistica",
+      "ofertas_historicas": 68814
+    },
+    {
+      "nombre": "Educacion Fisica",
+      "solr": "educacion fisica",
+      "ofertas_historicas": 76787
+    },
+    {
+      "nombre": "Especial",
+      "solr": "especial",
+      "ofertas_historicas": 41865
+    },
+    {
+      "nombre": "Inicial",
+      "solr": "inicial",
+      "ofertas_historicas": 19252
+    },
+    {
+      "nombre": "Primaria",
+      "solr": "primaria",
+      "ofertas_historicas": 78196
+    },
+    {
+      "nombre": "Psicologia",
+      "solr": "psicologia",
+      "ofertas_historicas": 15187
+    },
+    {
+      "nombre": "Secundaria",
+      "solr": "secundaria",
+      "ofertas_historicas": 197611
+    },
+    {
+      "nombre": "Secundaria Adultos",
+      "solr": "secundaria adultos",
+      "ofertas_historicas": 25
+    },
+    {
+      "nombre": "Superior",
+      "solr": "superior",
+      "ofertas_historicas": 21754
+    },
+    {
+      "nombre": "Tecnico Profesional",
+      "solr": "tecnico profesional",
+      "ofertas_historicas": 88295
+    }
+  ]
+}
