@@ -16,7 +16,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "collect:once": "tsx scripts/collect-once.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
