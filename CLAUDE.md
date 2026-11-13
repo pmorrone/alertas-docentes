@@ -30,6 +30,8 @@ GET https://servicios3.abc.gob.ar/valoracion.docente/api/apd.oferta.encabezado/s
 ```
 
 - Filtros adicionales con `fq` (se pueden repetir): `fq=descdistrito:tandil`, `fq=descnivelmodalidad:secundaria`, etc. Los valores van en minúscula.
+- **Valores con espacios van entre comillas** (y URL-encoded): `fq=descdistrito:"general pueyrredon"`. Sin comillas Solr interpreta la segunda palabra como otro término y el filtro falla.
+- Varios valores: `fq=descnivelmodalidad:(primaria OR secundaria)`.
 - La web agrega `json.wrf=jQuery...` (JSONP) y `_=timestamp`. **No usarlos**: sin ellos la respuesta es JSON puro.
 - Respuesta: `response.numFound`, `response.start` y `response.docs[]`.
 - El 12/11/2026 había **2670 ofertas publicadas** en toda la provincia.
@@ -49,23 +51,23 @@ Devuelve `[{estado, iddetalle, idoferta, ...}]`. Sirve para saber si una oferta 
 
 ### Campos útiles de cada doc
 
-| Campo                                            | Ejemplo                                    | Uso                                                  |
-| ------------------------------------------------ | ------------------------------------------ | ---------------------------------------------------- |
-| `iddetalle` / `id`                               | 4402588                                    | **ID único** de la oferta (deduplicación)            |
-| `idoferta`, `ige`                                | 4418871                                    | Identificadores mostrados en la web                  |
-| `estado`                                         | "Publicada"                                | Filtro                                               |
-| `descdistrito`, `numdistrito`                    | "PILAR", 83                                | Criterio: distrito                                   |
-| `descnivelmodalidad`, `nivelmodalidad`           | "SECUNDARIA" / "ARTISTICA"                 | Criterio: nivel                                      |
-| `cargo`, `descripcionarea`, `descripcioncargo`   | "Maestro de Danza Primaria (MDP)"          | Criterio: cargo/materia                              |
-| `areaincumbencia`                                | "MDP", "MCS", "IGS"                        | Código de área (matching exacto)                     |
-| `turno`                                          | "M" / "T" / "N"                            | Criterio: turno                                      |
-| `supl_revista`                                   | "S"                                        | Suplencia (filtro "solo suplencias")                 |
-| `jornada`, `hsmodulos`                           | "JS", 2                                    | Info para el aviso                                   |
-| `escuela`, `domiciliodesempeno`, `cursodivision` | "0083PP0032", ...                          | Info para el aviso                                   |
-| `supl_desde`, `supl_hasta`, `tomaposesion`       | ISO date                                   | Info para el aviso                                   |
-| `iniciooferta`, `finoferta`                      | ISO datetime UTC                           | Publicación y **cierre** (mostrar en hora Argentina) |
-| `lunes` … `sabado`                               | "15 A 17", "8.40 a 9.40", "7,30 A 9,40 HS" | Horarios en texto libre (v2)                         |
-| `observaciones`                                  | texto                                      | Info para el aviso                                   |
+| Campo | Ejemplo | Uso |
+|---|---|---|
+| `iddetalle` / `id` | 4402588 | **ID único** de la oferta (deduplicación) |
+| `idoferta`, `ige` | 4418871 | Identificadores mostrados en la web |
+| `estado` | "Publicada" | Filtro |
+| `descdistrito`, `numdistrito` | "PILAR", 83 | Criterio: distrito |
+| `descnivelmodalidad`, `nivelmodalidad` | "SECUNDARIA" / "ARTISTICA" | Criterio: nivel |
+| `cargo`, `descripcionarea`, `descripcioncargo` | "Maestro de Danza Primaria (MDP)" | Criterio: cargo/materia |
+| `areaincumbencia` | "MDP", "MCS", "IGS" | Código de área (matching exacto) |
+| `turno` | "M" / "T" / "N" / "MT" (combinados) | Criterio: turno (tratar como conjunto de letras) |
+| `supl_revista` | "S" | Suplencia (filtro "solo suplencias") |
+| `jornada`, `hsmodulos` | "JS", 2 | Info para el aviso |
+| `escuela`, `domiciliodesempeno`, `cursodivision` | "0083PP0032", ... | Info para el aviso |
+| `supl_desde`, `supl_hasta`, `tomaposesion` | ISO date | Info para el aviso |
+| `iniciooferta`, `finoferta` | ISO datetime UTC | Publicación y **cierre** (mostrar en hora Argentina) |
+| `lunes` … `sabado` | "15 A 17", "8.40 a 9.40", "7,30 A 9,40 HS" | Horarios en texto libre (v2) |
+| `observaciones` | texto | Info para el aviso |
 
 ### Datos personales: NO guardar ni mostrar
 
@@ -91,7 +93,6 @@ src/
 ```
 
 Flujo de cada ciclo:
-
 1. Traer las ofertas `Publicada` (paginadas, toda la provincia).
 2. Upsert por `iddetalle`; quedarse con las nuevas.
 3. Para cada oferta nueva y cada docente activo, si hay match y no existe ya (docente, iddetalle) en `notificaciones_enviadas`, enviar el aviso y registrarlo.
@@ -108,6 +109,14 @@ Flujo de cada ciclo:
 
 - Franjas horarias libres por día: parsear `lunes`..`sabado` y descartar las ofertas que se superpongan. Si no se puede parsear un horario, avisar igual con la nota "horario no reconocido".
 - Avisar cuando una oferta notificada cambia de estado (vía `check/offer`).
+
+### UX del bot (requisito de Pablo)
+
+El docente NO escribe comandos ni texto libre para configurar: todo con **botones (inline keyboards)**. Solo escribe `/start`.
+Flujo: /start -> elegir distrito(s) (buscador por texto con sugerencias o lista paginada) -> nivel (botones) -> materias/áreas (botones con las más comunes de ese nivel + buscar) -> turno (M/T/N, multi-selección) -> ¿solo suplencias? (Sí/No) -> resumen con [Confirmar] [Editar].
+Un menú principal persistente con botones: "Mis criterios", "Pausar avisos", "Darme de baja". Cada aviso trae botón "Ver en ABC".
+Las opciones (distritos, niveles, áreas) se obtienen de facets de Solr (`facet=true&facet.field=descdistrito`), no hardcodeadas.
+v2 opcional: Telegram Mini App (formulario web dentro de Telegram) para la carga de horarios.
 
 ### Comandos del bot
 
