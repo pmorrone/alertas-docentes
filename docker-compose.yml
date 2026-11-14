@@ -1,0 +1,14 @@
+# Run the bot: copy .env.example to .env, set TELEGRAM_BOT_TOKEN, then `docker compose up -d --build`.
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Wins over env_file, so a DB_PATH copied from .env.example cannot point outside the volume.
+      DB_PATH: /var/lib/alertas/alertas.sqlite
+    volumes:
+      - alertas-data:/var/lib/alertas
+
+volumes:
+  alertas-data:

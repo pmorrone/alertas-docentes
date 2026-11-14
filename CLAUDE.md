@@ -149,12 +149,12 @@ v2 opcional: Telegram Mini App (formulario web dentro de Telegram) para la carga
 ## Plan inicial
 
 1. Scaffold: TS, ESLint/Prettier, Vitest, estructura de carpetas. ✅
-2. Collector + normalización, con tests sobre `fixtures/oferta-publicada.json`.
-3. Matcher con tests.
-4. DB + scheduler.
-5. Bot de Telegram conversacional en texto libre con intérprete propio (reglas + fuzzy sobre catálogos) + confirmación con botón (crear el bot con @BotFather).
+2. Collector + normalización, con tests sobre `fixtures/oferta-publicada.json`. ✅
+3. Matcher con tests. ✅
+4. DB + scheduler. ✅
+5. Bot de Telegram conversacional en texto libre con intérprete propio (reglas + fuzzy sobre catálogos) + confirmación con botón (crear el bot con @BotFather). ✅
 6. Notas de voz: transcripción (interfaz `Transcriber`).
-7. Dockerfile, CI y README.
+7. Dockerfile, CI y README. ✅
 8. Prueba piloto en un distrito con 10–20 docentes. Acceso por **códigos de invitación** de un solo uso vía deep link (`t.me/<bot>?start=<codigo>`); sin código válido el bot responde "estamos en etapa de prueba" y anota en lista de espera. Tope global de usuarios configurable (`MAX_USERS`) y comando de admin (solo el chat_id de Pablo) para generar códigos y ver uso/costo.
 9. (Opcional) Menús con botones como alternativa, horarios disponibles, aviso de cambio de estado.
 

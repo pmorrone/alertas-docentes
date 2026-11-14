@@ -1,0 +1,17 @@
+node_modules
+dist
+coverage
+.git
+.github
+.env
+.env.*
+!.env.example
+*.sqlite
+*.db
+# The runtime needs data/sinonimos.json but never a local database.
+data/*
+!data/sinonimos.json
+tests
+scripts
+docs
+*.md
