@@ -5,11 +5,14 @@ FROM node:22-bookworm-slim AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+# better-sqlite3 ships prebuilt binaries for Linux, but it also has a binding.gyp, so npm would
+# try to compile it with node-gyp, which needs Python and a C++ toolchain this slim image
+# does not have. Skipping install scripts uses the bundled binary (the CI smoke test checks it).
+RUN npm ci --ignore-scripts
 
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
-RUN npm run build && npm prune --omit=dev
+RUN npm run build && npm prune --omit=dev --ignore-scripts
 
 # ---- runtime: only what the bot needs to run ----------------------------------------------
 FROM node:22-bookworm-slim AS runtime
