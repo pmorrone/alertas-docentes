@@ -18,6 +18,9 @@ const COMMANDS: Record<string, Command> = {
   pausar: 'pause',
   reanudar: 'resume',
   baja: 'leave',
+  // Admin only; the service ignores them from anyone else.
+  invitar: 'invite',
+  estado: 'status',
 };
 
 const GENERIC_ERROR = 'Ups, algo salió mal de mi lado 😅. Probá de nuevo en un rato.';
@@ -56,18 +59,16 @@ export function createTelegramBot(
     const text = ctx.message.text;
 
     if (text.startsWith('/')) {
-      const name = text.slice(1).split(/[\s@]/, 1)[0]?.toLowerCase() ?? '';
-      const command = COMMANDS[name];
-      await send(
-        ctx,
-        await (command ? service.command(chatId, command) : service.command(chatId, 'help')),
-      );
+      // "/start CODE" carries the invitation code of a deep link; "/cmd@bot" is a group-style call.
+      const [head = '', arg] = text.slice(1).split(/\s+/, 2);
+      const command = COMMANDS[head.split('@', 1)[0]?.toLowerCase() ?? ''];
+      await send(ctx, await service.command(chatId, command ?? 'help', arg));
       return;
     }
     await send(ctx, await service.text(chatId, text));
   });
 
-  bot.on('message:voice', async (ctx) => send(ctx, service.voice()));
+  bot.on('message:voice', async (ctx) => send(ctx, await service.voice(ctx.chat.id)));
 
   bot.on('callback_query:data', async (ctx) => {
     // Stop the spinner, and remove the buttons so a second tap cannot repeat the action.

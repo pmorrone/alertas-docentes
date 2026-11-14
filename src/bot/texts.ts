@@ -74,4 +74,54 @@ export const ALL_PAUSED_WARNING = '⚠️ Tenés los avisos pausados. Usá /rean
 export const confirmLeave =
   'Esto borra tus alertas y todos tus datos, y dejo de avisarte. ¿Seguro?';
 export const left =
-  'Listo, borré todos tus datos. Si querés volver, escribime /start cuando quieras. ¡Suerte!';
+  'Listo, borré todos tus datos. Si querés volver, vas a necesitar un código de invitación nuevo. ¡Suerte!';
+
+// ---- pilot access ---------------------------------------------------------------------------
+
+const WAITLIST_NOTE = 'Te anoté en la lista de espera para la próxima tanda.';
+
+export const NO_CODE = [
+  '🧪 Estamos en etapa de prueba y por ahora el bot es solo con invitación.',
+  WAITLIST_NOTE,
+  'Si tenés un código, abrí el enlace que te pasaron.',
+].join('\n');
+
+export const BAD_CODE = [
+  '🤔 Ese código no es válido o ya fue usado.',
+  WAITLIST_NOTE,
+  'Pedile uno nuevo a quien te invitó.',
+].join('\n');
+
+export const FULL = [
+  '🧪 Ya se completaron los lugares de esta etapa de prueba.',
+  WAITLIST_NOTE,
+].join('\n');
+
+export const ALREADY_WAITING =
+  'Ya estás en la lista de espera 🙌. Cuando haya lugar te van a invitar.';
+
+export const inviteCodes = (links: readonly string[]): string =>
+  [
+    links.length === 1
+      ? '🎟 Código de invitación (un solo uso):'
+      : `🎟 ${links.length} códigos de invitación (un solo uso cada uno):`,
+    '',
+    ...links,
+  ].join('\n');
+
+export const statusReport = (s: {
+  teachers: number;
+  maxUsers: number;
+  alerts: number;
+  unusedCodes: number;
+  usedCodes: number;
+  waiting: number;
+}): string =>
+  [
+    '<b>Estado del piloto</b>',
+    `👥 Docentes: ${s.teachers} de ${s.maxUsers}`,
+    `🔔 Alertas: ${s.alerts}`,
+    `🎟 Códigos sin usar: ${s.unusedCodes} (usados: ${s.usedCodes})`,
+    `⏳ Lista de espera: ${s.waiting}`,
+    '💸 Costo de APIs: $0 (no se usa ningún servicio pago)',
+  ].join('\n');

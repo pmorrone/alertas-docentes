@@ -6,6 +6,13 @@ const configSchema = z.object({
   POLL_INTERVAL_MIN: z.coerce.number().int().min(5).default(20),
   /** Pilot default: 3 alerts per teacher. */
   MAX_ALERTS_PER_USER: z.coerce.number().int().min(1).default(3),
+  /** Pilot default: 20 teachers in total. */
+  MAX_USERS: z.coerce.number().int().min(1).default(20),
+  /** Telegram chat id of the only person who can create invitation codes. */
+  ADMIN_CHAT_ID: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.coerce.number().int().optional(),
+  ),
   DB_PATH: z.string().min(1).default('./data/alertas.sqlite'),
 });
 
@@ -14,6 +21,8 @@ export interface Config {
   pollIntervalMin: number;
   dbPath: string;
   maxAlertsPerUser: number;
+  maxUsers: number;
+  adminChatId: number | undefined;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -27,5 +36,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     pollIntervalMin: parsed.data.POLL_INTERVAL_MIN,
     dbPath: parsed.data.DB_PATH,
     maxAlertsPerUser: parsed.data.MAX_ALERTS_PER_USER,
+    maxUsers: parsed.data.MAX_USERS,
+    adminChatId: parsed.data.ADMIN_CHAT_ID,
   };
 }

@@ -4,12 +4,14 @@ import {
   AlertLimitError,
   type Alert,
   type AlertRepository,
+  type InviteRepository,
   type NotificationRepository,
   type Repositories,
   type SeenOfferRepository,
   type Teacher,
   type TeacherRepository,
   type TeacherWithAlerts,
+  type WaitlistRepository,
 } from './types.js';
 
 interface TeacherRow {
@@ -96,6 +98,11 @@ class SqliteTeacherRepository implements TeacherRepository {
     }
     return [...byTeacher.values()];
   }
+
+  async count(): Promise<number> {
+    const row = this.db.prepare('SELECT COUNT(*) AS n FROM teachers').get() as { n: number };
+    return row.n;
+  }
 }
 
 interface AlertRow {
@@ -166,6 +173,11 @@ class SqliteAlertRepository implements AlertRepository {
   async delete(alertId: number): Promise<void> {
     this.db.prepare('DELETE FROM alerts WHERE id = ?').run(alertId);
   }
+
+  async count(): Promise<number> {
+    const row = this.db.prepare('SELECT COUNT(*) AS n FROM alerts').get() as { n: number };
+    return row.n;
+  }
 }
 
 class SqliteSeenOfferRepository implements SeenOfferRepository {
@@ -218,11 +230,65 @@ class SqliteNotificationRepository implements NotificationRepository {
   }
 }
 
+class SqliteInviteRepository implements InviteRepository {
+  constructor(private readonly db: Db) {}
+
+  async create(code: string, now: Date): Promise<void> {
+    this.db
+      .prepare('INSERT INTO invite_codes (code, created_at) VALUES (?, ?)')
+      .run(code, now.toISOString());
+  }
+
+  async redeem(code: string, chatId: number, now: Date): Promise<boolean> {
+    // One UPDATE guarded by "still unused" is atomic, so a code can only be redeemed once.
+    const result = this.db
+      .prepare(
+        `UPDATE invite_codes SET used_by_chat_id = ?, used_at = ?
+          WHERE code = ? AND used_at IS NULL`,
+      )
+      .run(chatId, now.toISOString(), code);
+    return result.changes === 1;
+  }
+
+  async stats(): Promise<{ unused: number; used: number }> {
+    const row = this.db
+      .prepare(
+        `SELECT COUNT(*) FILTER (WHERE used_at IS NULL) AS unused,
+                COUNT(*) FILTER (WHERE used_at IS NOT NULL) AS used
+           FROM invite_codes`,
+      )
+      .get() as { unused: number; used: number };
+    return row;
+  }
+}
+
+class SqliteWaitlistRepository implements WaitlistRepository {
+  constructor(private readonly db: Db) {}
+
+  async add(chatId: number, now: Date): Promise<boolean> {
+    const result = this.db
+      .prepare('INSERT OR IGNORE INTO waitlist (telegram_chat_id, created_at) VALUES (?, ?)')
+      .run(chatId, now.toISOString());
+    return result.changes === 1;
+  }
+
+  async remove(chatId: number): Promise<void> {
+    this.db.prepare('DELETE FROM waitlist WHERE telegram_chat_id = ?').run(chatId);
+  }
+
+  async count(): Promise<number> {
+    const row = this.db.prepare('SELECT COUNT(*) AS n FROM waitlist').get() as { n: number };
+    return row.n;
+  }
+}
+
 export function createSqliteRepositories(db: Db): Repositories {
   return {
     teachers: new SqliteTeacherRepository(db),
     alerts: new SqliteAlertRepository(db),
     seenOffers: new SqliteSeenOfferRepository(db),
     notifications: new SqliteNotificationRepository(db),
+    invites: new SqliteInviteRepository(db),
+    waitlist: new SqliteWaitlistRepository(db),
   };
 }
