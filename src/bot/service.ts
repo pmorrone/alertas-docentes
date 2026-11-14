@@ -5,8 +5,20 @@ import { APD_URL, formatSearchResults } from '../notifier/format.js';
 import type { OfferSearch } from '../search/offer-search.js';
 import { alertMatchesFilter, isEmptyFilter, sameCriteria } from './alert-filter.js';
 import { esc, truncate } from './html.js';
+import { generateInviteCode, normalizeInviteCode } from './invite-code.js';
 import * as texts from './texts.js';
 import type { BotReply, Button } from './types.js';
+
+/** Who may use the bot during the pilot. Without a policy the bot is open to everyone. */
+export interface AccessPolicy {
+  /** The only chat that can create codes and see usage. */
+  adminChatId: number | undefined;
+  /** Total teachers allowed. */
+  maxUsers: number;
+  /** Deep link that carries a code, e.g. `https://t.me/<bot>?start=<code>`. */
+  inviteLink: (code: string) => string;
+  generateCode?: () => string;
+}
 
 export interface BotServiceDeps {
   repos: Repositories;
@@ -14,6 +26,7 @@ export interface BotServiceDeps {
   search: OfferSearch;
   interpreter: Interpreter;
   maxAlertsPerUser: number;
+  access?: AccessPolicy;
   /** Fallback name for alerts saved before labels existed. */
   describeCriteria: (criteria: Criteria) => string;
   now?: () => Date;
@@ -21,7 +34,21 @@ export interface BotServiceDeps {
   pendingTtlMs?: number;
 }
 
-export type Command = 'start' | 'help' | 'list' | 'pause' | 'resume' | 'leave';
+export type Command =
+  | 'start'
+  | 'help'
+  | 'list'
+  | 'pause'
+  | 'resume'
+  | 'leave'
+  /** Admin only. */
+  | 'invite'
+  | 'status';
+
+type TeacherCommand = Exclude<Command, 'invite' | 'status'>;
+
+/** Most codes one `/invitar` can create. */
+const MAX_CODES_PER_REQUEST = 10;
 
 /** What the bot is waiting for from this chat. Lives in memory only. */
 type Pending =
@@ -35,10 +62,11 @@ type Pending =
  * Telegram or grammY, so it is tested with plain strings.
  */
 export interface BotService {
-  command(chatId: number, command: Command): Promise<BotReply[]>;
+  /** `arg` is what follows the command, e.g. the invitation code in `/start CODE`. */
+  command(chatId: number, command: Command, arg?: string): Promise<BotReply[]>;
   text(chatId: number, text: string): Promise<BotReply[]>;
   callback(chatId: number, data: string): Promise<BotReply[]>;
-  voice(): BotReply[];
+  voice(chatId: number): Promise<BotReply[]>;
 }
 
 /** How many offers a search shows (the rest are summarized). */
@@ -51,7 +79,7 @@ const labelOf = (alert: Alert, describe: (c: Criteria) => string): string =>
   alert.label || describe(alert.criteria);
 
 export function createBotService(deps: BotServiceDeps): BotService {
-  const { repos, interpreter, search, maxAlertsPerUser: max, describeCriteria } = deps;
+  const { repos, interpreter, search, maxAlertsPerUser: max, describeCriteria, access } = deps;
   const now = deps.now ?? (() => new Date());
   const ttl = deps.pendingTtlMs ?? 30 * 60_000;
   const pending = new Map<number, { value: Pending; expiresAt: number }>();
@@ -74,6 +102,65 @@ export function createBotService(deps: BotServiceDeps): BotService {
 
   const ensureTeacher = (chatId: number): Promise<Teacher> =>
     repos.teachers.upsertByChatId(chatId, now());
+
+  // ---- pilot access -----------------------------------------------------------------------
+
+  type Admission = { teacher: Teacher } | { denied: BotReply[] };
+
+  /** Parks a chat on the waiting list and says why it cannot come in yet. */
+  async function deny(chatId: number, reason: string): Promise<{ denied: BotReply[] }> {
+    const added = await repos.waitlist.add(chatId, now());
+    return { denied: [say(added ? reason : texts.ALREADY_WAITING)] };
+  }
+
+  /**
+   * Decides whether this chat may use the bot. Registered teachers and the admin always pass;
+   * anyone else needs a valid, unused code and a free spot.
+   */
+  async function admit(chatId: number, startCode?: string): Promise<Admission> {
+    const existing = await repos.teachers.findByChatId(chatId);
+    if (existing) return { teacher: existing };
+    if (!access || chatId === access.adminChatId) return { teacher: await ensureTeacher(chatId) };
+
+    const code = startCode ? normalizeInviteCode(startCode) : undefined;
+    if (!startCode) return deny(chatId, texts.NO_CODE);
+    // Check room before spending the code, so a full pilot does not burn invitations.
+    if ((await repos.teachers.count()) >= access.maxUsers) return deny(chatId, texts.FULL);
+    if (!code || !(await repos.invites.redeem(code, chatId, now()))) {
+      return deny(chatId, texts.BAD_CODE);
+    }
+    await repos.waitlist.remove(chatId);
+    return { teacher: await ensureTeacher(chatId) };
+  }
+
+  async function invite(arg: string | undefined, policy: AccessPolicy): Promise<BotReply[]> {
+    const asked = Number.parseInt(arg ?? '', 10);
+    const count = Number.isInteger(asked) ? Math.min(Math.max(asked, 1), MAX_CODES_PER_REQUEST) : 1;
+    const generate = policy.generateCode ?? generateInviteCode;
+    const links: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const code = generate();
+      await repos.invites.create(code, now());
+      links.push(policy.inviteLink(code));
+    }
+    return [say(texts.inviteCodes(links))];
+  }
+
+  async function status(policy: AccessPolicy): Promise<BotReply[]> {
+    const codes = await repos.invites.stats();
+    return [
+      say(
+        texts.statusReport({
+          teachers: await repos.teachers.count(),
+          maxUsers: policy.maxUsers,
+          alerts: await repos.alerts.count(),
+          unusedCodes: codes.unused,
+          usedCodes: codes.used,
+          waiting: await repos.waitlist.count(),
+        }),
+      ),
+    ];
+  }
 
   // ---- rendering --------------------------------------------------------------------------
 
@@ -230,9 +317,19 @@ export function createBotService(deps: BotServiceDeps): BotService {
 
   // ---- entry points -----------------------------------------------------------------------
 
-  async function command(chatId: number, name: Command): Promise<BotReply[]> {
-    const teacher = await ensureTeacher(chatId);
-    switch (name) {
+  async function command(chatId: number, name: Command, arg?: string): Promise<BotReply[]> {
+    if (name === 'invite' || name === 'status') {
+      if (access && access.adminChatId === chatId) {
+        return name === 'invite' ? invite(arg, access) : status(access);
+      }
+    }
+    // Admin commands from anyone else are treated as unknown, so they reveal nothing.
+    const teacherCommand: TeacherCommand = name === 'invite' || name === 'status' ? 'help' : name;
+
+    const admission = await admit(chatId, teacherCommand === 'start' ? arg : undefined);
+    if ('denied' in admission) return admission.denied;
+    const { teacher } = admission;
+    switch (teacherCommand) {
       case 'start':
         clearPending(chatId);
         return [say(texts.welcome(max))];
@@ -260,7 +357,9 @@ export function createBotService(deps: BotServiceDeps): BotService {
   }
 
   async function text(chatId: number, message: string): Promise<BotReply[]> {
-    const teacher = await ensureTeacher(chatId);
+    const admission = await admit(chatId);
+    if ('denied' in admission) return admission.denied;
+    const { teacher } = admission;
     const current = getPending(chatId);
 
     // In the middle of a question, "mis alertas" or "ayuda" still do what they say.
@@ -273,7 +372,9 @@ export function createBotService(deps: BotServiceDeps): BotService {
   }
 
   async function callback(chatId: number, data: string): Promise<BotReply[]> {
-    const teacher = await ensureTeacher(chatId);
+    const admission = await admit(chatId);
+    if ('denied' in admission) return admission.denied;
+    const { teacher } = admission;
     const [action = '', arg] = data.split(':');
     const id = arg === undefined ? NaN : Number(arg);
     const current = getPending(chatId);
@@ -377,6 +478,9 @@ export function createBotService(deps: BotServiceDeps): BotService {
       }
       return callback(chatId, data);
     },
-    voice: () => [say(texts.VOICE_NOT_YET)],
+    voice: async (chatId) => {
+      const admission = await admit(chatId);
+      return 'denied' in admission ? admission.denied : [say(texts.VOICE_NOT_YET)];
+    },
   };
 }

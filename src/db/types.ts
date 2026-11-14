@@ -49,6 +49,8 @@ export interface TeacherRepository {
   delete(teacherId: number): Promise<void>;
   /** Active teachers that have at least one active alert, with those alerts. */
   listActiveWithAlerts(): Promise<TeacherWithAlerts[]>;
+  /** How many teachers are registered (paused ones included). */
+  count(): Promise<number>;
 }
 
 export interface AlertRepository {
@@ -69,6 +71,8 @@ export interface AlertRepository {
   updateCriteria(alertId: number, criteria: Criteria): Promise<void>;
   setActive(alertId: number, active: boolean): Promise<void>;
   delete(alertId: number): Promise<void>;
+  /** Total alerts of all teachers. */
+  count(): Promise<number>;
 }
 
 /** Offers (by `iddetalle`) the collector has already processed. */
@@ -86,9 +90,31 @@ export interface NotificationRepository {
   record(teacherId: number, offerId: number, now: Date): Promise<void>;
 }
 
+/** Single-use invitation codes for the pilot. */
+export interface InviteRepository {
+  /** Stores a new, unused code. Codes are unique. */
+  create(code: string, now: Date): Promise<void>;
+  /**
+   * Marks an unused code as used by `chatId`. Atomic: of two simultaneous attempts only one
+   * wins. Returns false for unknown or already used codes.
+   */
+  redeem(code: string, chatId: number, now: Date): Promise<boolean>;
+  stats(): Promise<{ unused: number; used: number }>;
+}
+
+/** People who asked for access when the pilot had no room or they had no code. */
+export interface WaitlistRepository {
+  /** Returns true when the chat was added now, false if it was already waiting. */
+  add(chatId: number, now: Date): Promise<boolean>;
+  remove(chatId: number): Promise<void>;
+  count(): Promise<number>;
+}
+
 export interface Repositories {
   teachers: TeacherRepository;
   alerts: AlertRepository;
   seenOffers: SeenOfferRepository;
   notifications: NotificationRepository;
+  invites: InviteRepository;
+  waitlist: WaitlistRepository;
 }

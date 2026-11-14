@@ -52,6 +52,21 @@ const MIGRATIONS: readonly string[] = [
   `
   ALTER TABLE alerts ADD COLUMN label TEXT NOT NULL DEFAULT '';
   `,
+  // Pilot access: single-use invitation codes and a waiting list. A used code keeps the chat id
+  // that redeemed it, without a foreign key, so it stays used even if that teacher leaves.
+  `
+  CREATE TABLE invite_codes (
+    code            TEXT PRIMARY KEY,
+    created_at      TEXT NOT NULL,
+    used_by_chat_id INTEGER,
+    used_at         TEXT
+  );
+
+  CREATE TABLE waitlist (
+    telegram_chat_id INTEGER PRIMARY KEY,
+    created_at       TEXT NOT NULL
+  );
+  `,
 ];
 
 /** Applies pending migrations, optionally stopping at `target` (used to test upgrades). */

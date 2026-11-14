@@ -97,6 +97,20 @@ Without a token the app still runs and only logs the alerts it would send.
 | `POLL_INTERVAL_MIN`   | `20`                   | Minutes between collections (minimum 5)                  |
 | `DB_PATH`             | `./data/alertas.sqlite`| SQLite file                                              |
 | `MAX_ALERTS_PER_USER` | `3`                    | Alerts each teacher can have                             |
+| `MAX_USERS`           | `20`                   | Teachers allowed in the pilot                            |
+| `ADMIN_CHAT_ID`       | none                   | Telegram chat id of the admin (creates invitation codes) |
+
+### Pilot access
+
+The bot is invitation-only. A new chat needs a single-use code, delivered as a Telegram deep link
+(`https://t.me/<bot>?start=<code>`); without one it gets a "testing phase" message and goes on a
+waiting list. Set `ADMIN_CHAT_ID` to your own chat id, then:
+
+- `/invitar [n]` creates `n` codes (default 1, at most 10) and replies with the links.
+- `/estado` shows teachers vs `MAX_USERS`, alerts, unused and used codes, and the waiting list.
+
+Teachers already registered keep working. A full pilot does not burn codes, and someone who leaves
+with `/baja` needs a new code to come back.
 
 To look at the data without running the bot:
 
@@ -138,3 +152,5 @@ Known limitations: there is no send-rate control yet (Telegram allows about 30 m
 ## About the data
 
 This is an independent project, not affiliated with the DGCyE. It only reads public data, at low frequency, from the same endpoints the official website uses.
+
+© 2026 Pablo Morrone. All rights reserved.

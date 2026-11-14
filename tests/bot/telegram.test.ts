@@ -183,3 +183,76 @@ describe('telegram wiring (grammY)', () => {
     expect(await repos.teachers.findByChatId(77)).toBeUndefined();
   });
 });
+
+describe('telegram wiring: invitation deep links', () => {
+  const ADMIN = 7;
+  let db: Db;
+  let repos: Repositories;
+  let bot: Bot;
+  let replies: string[];
+  let updateId = 0;
+
+  beforeEach(async () => {
+    db = openDatabase(':memory:');
+    repos = createSqliteRepositories(db);
+    const service = createBotService({
+      repos,
+      search: { findMatching: async () => ({ total: 0, offers: [] }) },
+      interpreter,
+      maxAlertsPerUser: 3,
+      describeCriteria: (c) => describeCriteria(c, catalog),
+      access: {
+        adminChatId: ADMIN,
+        maxUsers: 5,
+        inviteLink: (code) => `https://t.me/${botInfo.username}?start=${code}`,
+      },
+    });
+    bot = createTelegramBot('123:fake-token', service, { logger: silentLogger, botInfo });
+    replies = [];
+    bot.api.config.use(async (_prev, method, payload) => {
+      if (method === 'sendMessage') replies.push(String((payload as { text: string }).text));
+      return { ok: true, result: { message_id: 1 } } as never;
+    });
+    await bot.init();
+  });
+  afterEach(() => db.close());
+
+  const say = (id: number, text: string) =>
+    bot.handleUpdate({
+      update_id: ++updateId,
+      message: {
+        message_id: updateId,
+        date: 0,
+        chat: { id, type: 'private', first_name: 'T' },
+        from: { id, is_bot: false, first_name: 'T' },
+        text,
+        entities: [{ type: 'bot_command', offset: 0, length: text.split(' ')[0]!.length }],
+      },
+    } as Update);
+
+  it('turns "/start CODE" from a deep link into a registration', async () => {
+    await say(ADMIN, '/invitar');
+    const link = replies.at(-1)!.match(/https:\/\/t\.me\/alertas_test_bot\?start=([A-Z0-9]+)/);
+    expect(link).not.toBeNull();
+
+    await say(55, `/start ${link![1]}`);
+
+    expect(await repos.teachers.findByChatId(55)).toBeDefined();
+    expect(replies.at(-1)).toContain('alertas APD');
+  });
+
+  it('sends a plain /start to the waiting list', async () => {
+    await say(55, '/start');
+
+    expect(await repos.teachers.findByChatId(55)).toBeUndefined();
+    expect(replies.at(-1)).toContain('etapa de prueba');
+  });
+
+  it('serves /estado only to the admin', async () => {
+    await say(ADMIN, '/estado');
+    expect(replies.at(-1)).toContain('Estado del piloto');
+
+    await say(55, '/estado');
+    expect(replies.at(-1)).not.toContain('Estado del piloto');
+  });
+});

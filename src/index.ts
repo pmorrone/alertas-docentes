@@ -29,8 +29,17 @@ if (config.telegramBotToken) {
     interpreter: loadInterpreter(),
     maxAlertsPerUser: config.maxAlertsPerUser,
     describeCriteria: describe,
+    access: {
+      adminChatId: config.adminChatId,
+      maxUsers: config.maxUsers,
+      // `bot` is created right below; its username is only needed once the bot is running.
+      inviteLink: (code) => `https://t.me/${bot.botInfo.username}?start=${code}`,
+    },
   });
   const bot = createTelegramBot(config.telegramBotToken, service, { logger });
+  if (config.adminChatId === undefined) {
+    logger.warn('ADMIN_CHAT_ID is not set: nobody can create invitation codes');
+  }
   notifier = new TelegramNotifier(bot.api, describe);
   stopBot = () => bot.stop();
   // Long polling: runs until `bot.stop()`. Not awaited on purpose.

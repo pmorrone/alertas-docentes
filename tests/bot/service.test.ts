@@ -84,8 +84,8 @@ describe('bot service', () => {
       expect(textOf(await service.text(CHAT, 'ayuda'))).toContain('Cómo funciona');
     });
 
-    it('answers voice notes honestly', () => {
-      expect(textOf(service.voice())).toContain('Todavía no puedo escuchar audios');
+    it('answers voice notes honestly', async () => {
+      expect(textOf(await service.voice(CHAT))).toContain('Todavía no puedo escuchar audios');
     });
 
     it('does not understand nonsense and says so', async () => {

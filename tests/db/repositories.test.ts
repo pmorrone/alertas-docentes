@@ -187,6 +187,66 @@ describe('sqlite repositories', () => {
     });
   });
 
+  describe('counts', () => {
+    it('count teachers and alerts of everyone', async () => {
+      const a = await repos.teachers.upsertByChatId(1, NOW);
+      const b = await repos.teachers.upsertByChatId(2, NOW);
+      await repos.alerts.create(a.id, createCriteria({}), NOW, 3);
+      await repos.alerts.create(b.id, createCriteria({}), NOW, 3);
+      await repos.alerts.create(b.id, createCriteria({ areas: ['mdp'] }), NOW, 3);
+
+      expect(await repos.teachers.count()).toBe(2);
+      expect(await repos.alerts.count()).toBe(3);
+    });
+  });
+
+  describe('invites', () => {
+    it('redeems a code exactly once', async () => {
+      await repos.invites.create('ABCD2345', NOW);
+
+      expect(await repos.invites.redeem('ABCD2345', 10, NOW)).toBe(true);
+      expect(await repos.invites.redeem('ABCD2345', 11, NOW)).toBe(false);
+      expect(await repos.invites.redeem('UNKNOWN9', 10, NOW)).toBe(false);
+    });
+
+    it('keeps a code used even after its teacher leaves', async () => {
+      await repos.invites.create('ABCD2345', NOW);
+      const t = await repos.teachers.upsertByChatId(10, NOW);
+      await repos.invites.redeem('ABCD2345', 10, NOW);
+
+      await repos.teachers.delete(t.id);
+
+      expect(await repos.invites.redeem('ABCD2345', 10, NOW)).toBe(false);
+    });
+
+    it('counts used and unused codes', async () => {
+      expect(await repos.invites.stats()).toEqual({ unused: 0, used: 0 });
+      await repos.invites.create('AAAA2222', NOW);
+      await repos.invites.create('BBBB3333', NOW);
+      await repos.invites.redeem('AAAA2222', 1, NOW);
+
+      expect(await repos.invites.stats()).toEqual({ unused: 1, used: 1 });
+    });
+
+    it('refuses duplicate codes', async () => {
+      await repos.invites.create('AAAA2222', NOW);
+      await expect(repos.invites.create('AAAA2222', NOW)).rejects.toThrow();
+    });
+  });
+
+  describe('waitlist', () => {
+    it('adds a chat once and can remove it', async () => {
+      expect(await repos.waitlist.add(5, NOW)).toBe(true);
+      expect(await repos.waitlist.add(5, NOW)).toBe(false);
+      expect(await repos.waitlist.add(6, NOW)).toBe(true);
+      expect(await repos.waitlist.count()).toBe(2);
+
+      await repos.waitlist.remove(5);
+
+      expect(await repos.waitlist.count()).toBe(1);
+    });
+  });
+
   describe('notifications', () => {
     it('records a (teacher, offer) pair once', async () => {
       const t = await repos.teachers.upsertByChatId(1, NOW);
@@ -218,7 +278,7 @@ describe('openDatabase', () => {
     const db2 = openDatabase(path);
     const found = await createSqliteRepositories(db2).teachers.findByChatId(42);
     expect(found?.telegramChatId).toBe(42);
-    expect(db2.pragma('user_version', { simple: true })).toBe(3);
+    expect(db2.pragma('user_version', { simple: true })).toBe(4);
     db2.close();
   });
 });
@@ -249,7 +309,7 @@ describe('migrations', () => {
         createdAt: new Date('2026-11-02T00:00:00Z'),
       },
     ]);
-    expect(db.pragma('user_version', { simple: true })).toBe(3);
+    expect(db.pragma('user_version', { simple: true })).toBe(4);
     expect(
       db.prepare("SELECT name FROM sqlite_master WHERE name = 'criteria'").get(),
     ).toBeUndefined();
