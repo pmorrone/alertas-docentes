@@ -48,6 +48,10 @@ const MIGRATIONS: readonly string[] = [
 
   DROP TABLE criteria;
   `,
+  // Readable name of each alert ("Historia · Pilar · Tarde"), shown in lists and notices.
+  `
+  ALTER TABLE alerts ADD COLUMN label TEXT NOT NULL DEFAULT '';
+  `,
 ];
 
 /** Applies pending migrations, optionally stopping at `target` (used to test upgrades). */

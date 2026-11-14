@@ -67,7 +67,7 @@ class SqliteTeacherRepository implements TeacherRepository {
     const rows = this.db
       .prepare(
         `SELECT t.id AS t_id, t.telegram_chat_id, t.active AS t_active, t.created_at AS t_created,
-                a.id, a.teacher_id, a.data, a.active, a.created_at
+                a.id, a.teacher_id, a.data, a.label, a.active, a.created_at
            FROM teachers t JOIN alerts a ON a.teacher_id = t.id
           WHERE t.active = 1 AND a.active = 1
           ORDER BY t.id, a.id`,
@@ -102,6 +102,7 @@ interface AlertRow {
   id: number;
   teacher_id: number;
   data: string;
+  label: string;
   active: number;
   created_at: string;
 }
@@ -110,6 +111,7 @@ const toAlert = (row: AlertRow): Alert => ({
   id: row.id,
   teacherId: row.teacher_id,
   criteria: criteriaSchema.parse(JSON.parse(row.data)),
+  label: row.label,
   active: row.active === 1,
   createdAt: new Date(row.created_at),
 });
@@ -122,6 +124,7 @@ class SqliteAlertRepository implements AlertRepository {
     criteria: Criteria,
     now: Date,
     maxAlerts: number,
+    label = '',
   ): Promise<Alert> {
     // Count and insert in one transaction so the limit cannot be exceeded.
     const id = this.db.transaction((): number => {
@@ -130,8 +133,8 @@ class SqliteAlertRepository implements AlertRepository {
         .get(teacherId) as { n: number };
       if (n >= maxAlerts) throw new AlertLimitError(maxAlerts);
       const result = this.db
-        .prepare('INSERT INTO alerts (teacher_id, data, created_at) VALUES (?, ?, ?)')
-        .run(teacherId, JSON.stringify(criteria), now.toISOString());
+        .prepare('INSERT INTO alerts (teacher_id, data, label, created_at) VALUES (?, ?, ?, ?)')
+        .run(teacherId, JSON.stringify(criteria), label, now.toISOString());
       return Number(result.lastInsertRowid);
     })();
     return (await this.find(id)) as Alert;
