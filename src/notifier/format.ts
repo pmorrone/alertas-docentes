@@ -21,16 +21,21 @@ export function formatApiDateTime(date: Date): string {
 
 export { formatDay as formatApiDay };
 
-/** "GENERAL PUEYRREDON" -> "General Pueyrredon". */
+const LOWERCASE_WORDS = new Set(['de', 'del', 'la', 'las', 'los', 'el', 'y', 'e']);
+
+/** "GENERAL PUEYRREDON" -> "General Pueyrredon", "LOMAS DE ZAMORA" -> "Lomas de Zamora". */
 export function titleCase(value: string): string {
   return value
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .trim()
-    .replace(
-      /(^|\s)(\p{L})/gu,
-      (_m, space: string, letter: string) => space + letter.toUpperCase(),
-    );
+    .split(' ')
+    .map((word, index) =>
+      index > 0 && LOWERCASE_WORDS.has(word)
+        ? word
+        : word.replace(/^\p{L}/u, (c) => c.toUpperCase()),
+    )
+    .join(' ');
 }
 
 const WEEKDAY_ABBREVIATIONS: Record<Weekday, string> = {
@@ -63,7 +68,12 @@ export interface FormattedOffer {
  * The alert sent to a teacher. `alertLabels` are the names of the teacher's alerts that
  * matched, so they know why they got it.
  */
-export function formatOffer(offer: Offer, alertLabels: readonly string[]): FormattedOffer {
+export function formatOffer(
+  offer: Offer,
+  alertLabels: readonly string[],
+  /** Bullet at the start of the title; lists use a quieter one than "new". */
+  icon = '🆕',
+): FormattedOffer {
   const where = [offer.levelName, offer.districtName].filter(Boolean).map(titleCase);
   const title = [`<b>${esc(offer.position || offer.areaDescription)}</b>`, ...where.map(esc)];
 
@@ -87,7 +97,7 @@ export function formatOffer(offer: Offer, alertLabels: readonly string[]): Forma
     .join(' ');
 
   const lines = [
-    `🆕 ${title.join(', ')}`,
+    `${icon} ${title.join(', ')}`,
     details.length > 0 ? esc(details.join(' · ')) : '',
     schedule.length > 0 ? esc(schedule.join(' · ')) : '',
     place ? `📍 ${esc(place)}` : '',
@@ -100,4 +110,41 @@ export function formatOffer(offer: Offer, alertLabels: readonly string[]): Forma
       : '',
   ];
   return { text: lines.filter(Boolean).join('\n'), url: APD_URL };
+}
+
+/** Telegram rejects messages over 4096 characters; stay well under. */
+const MAX_LIST_CHARS = 3500;
+
+export interface FormattedSearch {
+  text: string;
+  /** How many offers fit in the message. */
+  shown: number;
+}
+
+/**
+ * Several offers in one message (they all link to the same APD site, so one button is
+ * enough and the chat is not flooded). Stops adding offers when the message gets long.
+ */
+export function formatSearchResults(
+  offers: readonly Offer[],
+  total: number,
+  label: string,
+): FormattedSearch {
+  if (total === 0) {
+    return { text: `🔎 Ahora no hay ofertas publicadas para <b>${esc(label)}</b>.`, shown: 0 };
+  }
+
+  const head = `🔎 <b>${total === 1 ? '1 oferta publicada' : `${total} ofertas publicadas`}</b> ahora para <b>${esc(label)}</b>:`;
+  const blocks: string[] = [];
+  let length = head.length;
+  for (const offer of offers) {
+    const block = formatOffer(offer, [], '▫️').text;
+    if (blocks.length > 0 && length + block.length > MAX_LIST_CHARS) break;
+    blocks.push(block);
+    length += block.length + 2;
+  }
+
+  const rest = total - blocks.length;
+  const tail = rest > 0 ? [`… y ${rest} más. Las ves todas en el sitio de APD.`] : [];
+  return { text: [head, ...blocks, ...tail].join('\n\n'), shown: blocks.length };
 }

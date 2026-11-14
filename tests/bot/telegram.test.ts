@@ -42,6 +42,7 @@ describe('telegram wiring (grammY)', () => {
     repos = createSqliteRepositories(db);
     const service = createBotService({
       repos,
+      search: { findMatching: async () => ({ total: 0, offers: [] }) },
       interpreter,
       maxAlertsPerUser: 3,
       describeCriteria: (c) => describeCriteria(c, catalog),
@@ -136,6 +137,21 @@ describe('telegram wiring (grammY)', () => {
     expect(calls.map((c) => c.method)).toContain('editMessageReplyMarkup'); // buttons removed
     const teacher = (await repos.teachers.findByChatId(42))!;
     expect(await repos.alerts.listByTeacher(teacher.id)).toHaveLength(1);
+  });
+
+  it('renders link buttons as URL buttons and the others as callback buttons', async () => {
+    await sendText('qué hay de historia en pilar');
+
+    const keyboard = lastKeyboard() as unknown as {
+      text: string;
+      url?: string;
+      callback_data?: string;
+    }[][];
+    expect(keyboard[0]![0]).toMatchObject({
+      text: '🔗 Ver en ABC',
+      url: 'https://misservicios.abc.gob.ar/actos.publicos.digitales/',
+    });
+    expect(keyboard[1]![0]).toMatchObject({ callback_data: 'mkalert' });
   });
 
   it('turns a failure into a friendly message instead of silence', async () => {

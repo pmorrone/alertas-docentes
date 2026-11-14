@@ -26,7 +26,7 @@ async function send(ctx: Context, replies: readonly BotReply[]): Promise<void> {
   for (const reply of replies) {
     const keyboard = reply.buttons
       ? reply.buttons.reduce((kb, row) => {
-          row.forEach((b) => kb.text(b.text, b.data));
+          row.forEach((b) => ('url' in b ? kb.url(b.text, b.url) : kb.text(b.text, b.data)));
           return kb.row();
         }, new InlineKeyboard())
       : undefined;
