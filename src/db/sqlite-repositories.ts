@@ -1,13 +1,15 @@
 import { criteriaSchema, type Criteria } from '../matcher/index.js';
 import type { Db } from './database.js';
-import type {
-  CriteriaRepository,
-  NotificationRepository,
-  Repositories,
-  SeenOfferRepository,
-  Teacher,
-  TeacherRepository,
-  TeacherWithCriteria,
+import {
+  AlertLimitError,
+  type Alert,
+  type AlertRepository,
+  type NotificationRepository,
+  type Repositories,
+  type SeenOfferRepository,
+  type Teacher,
+  type TeacherRepository,
+  type TeacherWithAlerts,
 } from './types.js';
 
 interface TeacherRow {
@@ -61,38 +63,105 @@ class SqliteTeacherRepository implements TeacherRepository {
     this.db.prepare('DELETE FROM teachers WHERE id = ?').run(teacherId);
   }
 
-  async listActiveWithCriteria(): Promise<TeacherWithCriteria[]> {
+  async listActiveWithAlerts(): Promise<TeacherWithAlerts[]> {
     const rows = this.db
       .prepare(
-        `SELECT t.*, c.data AS criteria_data
-           FROM teachers t JOIN criteria c ON c.teacher_id = t.id
-          WHERE t.active = 1
-          ORDER BY t.id`,
+        `SELECT t.id AS t_id, t.telegram_chat_id, t.active AS t_active, t.created_at AS t_created,
+                a.id, a.teacher_id, a.data, a.active, a.created_at
+           FROM teachers t JOIN alerts a ON a.teacher_id = t.id
+          WHERE t.active = 1 AND a.active = 1
+          ORDER BY t.id, a.id`,
       )
-      .all() as (TeacherRow & { criteria_data: string })[];
-    return rows.map((row) => ({
-      teacher: toTeacher(row),
-      criteria: criteriaSchema.parse(JSON.parse(row.criteria_data)),
-    }));
+      .all() as (AlertRow & {
+      t_id: number;
+      telegram_chat_id: number;
+      t_active: number;
+      t_created: string;
+    })[];
+
+    const byTeacher = new Map<number, TeacherWithAlerts>();
+    for (const row of rows) {
+      let entry = byTeacher.get(row.t_id);
+      if (!entry) {
+        const teacher = toTeacher({
+          id: row.t_id,
+          telegram_chat_id: row.telegram_chat_id,
+          active: row.t_active,
+          created_at: row.t_created,
+        });
+        entry = { teacher, alerts: [] };
+        byTeacher.set(row.t_id, entry);
+      }
+      entry.alerts.push(toAlert(row));
+    }
+    return [...byTeacher.values()];
   }
 }
 
-class SqliteCriteriaRepository implements CriteriaRepository {
+interface AlertRow {
+  id: number;
+  teacher_id: number;
+  data: string;
+  active: number;
+  created_at: string;
+}
+
+const toAlert = (row: AlertRow): Alert => ({
+  id: row.id,
+  teacherId: row.teacher_id,
+  criteria: criteriaSchema.parse(JSON.parse(row.data)),
+  active: row.active === 1,
+  createdAt: new Date(row.created_at),
+});
+
+class SqliteAlertRepository implements AlertRepository {
   constructor(private readonly db: Db) {}
 
-  async save(teacherId: number, criteria: Criteria, now: Date): Promise<void> {
-    this.db
-      .prepare(
-        `INSERT INTO criteria (teacher_id, data, updated_at) VALUES (?, ?, ?)
-         ON CONFLICT(teacher_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
-      )
-      .run(teacherId, JSON.stringify(criteria), now.toISOString());
+  async create(
+    teacherId: number,
+    criteria: Criteria,
+    now: Date,
+    maxAlerts: number,
+  ): Promise<Alert> {
+    // Count and insert in one transaction so the limit cannot be exceeded.
+    const id = this.db.transaction((): number => {
+      const { n } = this.db
+        .prepare('SELECT COUNT(*) AS n FROM alerts WHERE teacher_id = ?')
+        .get(teacherId) as { n: number };
+      if (n >= maxAlerts) throw new AlertLimitError(maxAlerts);
+      const result = this.db
+        .prepare('INSERT INTO alerts (teacher_id, data, created_at) VALUES (?, ?, ?)')
+        .run(teacherId, JSON.stringify(criteria), now.toISOString());
+      return Number(result.lastInsertRowid);
+    })();
+    return (await this.find(id)) as Alert;
   }
 
-  async find(teacherId: number): Promise<Criteria | undefined> {
-    const row = this.db.prepare('SELECT data FROM criteria WHERE teacher_id = ?').get(teacherId) as
-      { data: string } | undefined;
-    return row && criteriaSchema.parse(JSON.parse(row.data));
+  async listByTeacher(teacherId: number): Promise<Alert[]> {
+    const rows = this.db
+      .prepare('SELECT * FROM alerts WHERE teacher_id = ? ORDER BY id')
+      .all(teacherId) as AlertRow[];
+    return rows.map(toAlert);
+  }
+
+  async find(alertId: number): Promise<Alert | undefined> {
+    const row = this.db.prepare('SELECT * FROM alerts WHERE id = ?').get(alertId) as
+      AlertRow | undefined;
+    return row && toAlert(row);
+  }
+
+  async updateCriteria(alertId: number, criteria: Criteria): Promise<void> {
+    this.db
+      .prepare('UPDATE alerts SET data = ? WHERE id = ?')
+      .run(JSON.stringify(criteria), alertId);
+  }
+
+  async setActive(alertId: number, active: boolean): Promise<void> {
+    this.db.prepare('UPDATE alerts SET active = ? WHERE id = ?').run(active ? 1 : 0, alertId);
+  }
+
+  async delete(alertId: number): Promise<void> {
+    this.db.prepare('DELETE FROM alerts WHERE id = ?').run(alertId);
   }
 }
 
@@ -149,7 +218,7 @@ class SqliteNotificationRepository implements NotificationRepository {
 export function createSqliteRepositories(db: Db): Repositories {
   return {
     teachers: new SqliteTeacherRepository(db),
-    criteria: new SqliteCriteriaRepository(db),
+    alerts: new SqliteAlertRepository(db),
     seenOffers: new SqliteSeenOfferRepository(db),
     notifications: new SqliteNotificationRepository(db),
   };

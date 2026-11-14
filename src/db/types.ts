@@ -9,9 +9,28 @@ export interface Teacher {
   createdAt: Date;
 }
 
-export interface TeacherWithCriteria {
-  teacher: Teacher;
+/** One saved search. A teacher can have several (up to the configured maximum). */
+export interface Alert {
+  id: number;
+  teacherId: number;
   criteria: Criteria;
+  /** False while this single alert is paused (independent of the teacher's global pause). */
+  active: boolean;
+  createdAt: Date;
+}
+
+export interface TeacherWithAlerts {
+  teacher: Teacher;
+  /** Only the active alerts; never empty. */
+  alerts: Alert[];
+}
+
+/** Thrown by `AlertRepository.create` when the teacher already has the maximum. */
+export class AlertLimitError extends Error {
+  constructor(readonly maxAlerts: number) {
+    super(`alert limit reached (${maxAlerts})`);
+    this.name = 'AlertLimitError';
+  }
 }
 
 /*
@@ -24,15 +43,24 @@ export interface TeacherRepository {
   upsertByChatId(telegramChatId: number, now: Date): Promise<Teacher>;
   findByChatId(telegramChatId: number): Promise<Teacher | undefined>;
   setActive(teacherId: number, active: boolean): Promise<void>;
-  /** Deletes the teacher and, with it, their criteria and notification history. */
+  /** Deletes the teacher and, with it, their alerts and notification history. */
   delete(teacherId: number): Promise<void>;
-  /** Active teachers that have saved criteria. */
-  listActiveWithCriteria(): Promise<TeacherWithCriteria[]>;
+  /** Active teachers that have at least one active alert, with those alerts. */
+  listActiveWithAlerts(): Promise<TeacherWithAlerts[]>;
 }
 
-export interface CriteriaRepository {
-  save(teacherId: number, criteria: Criteria, now: Date): Promise<void>;
-  find(teacherId: number): Promise<Criteria | undefined>;
+export interface AlertRepository {
+  /**
+   * Adds an alert (active). Paused alerts count toward the limit.
+   * @throws AlertLimitError when the teacher already has `maxAlerts`.
+   */
+  create(teacherId: number, criteria: Criteria, now: Date, maxAlerts: number): Promise<Alert>;
+  /** All of the teacher's alerts, paused or not, oldest first. */
+  listByTeacher(teacherId: number): Promise<Alert[]>;
+  find(alertId: number): Promise<Alert | undefined>;
+  updateCriteria(alertId: number, criteria: Criteria): Promise<void>;
+  setActive(alertId: number, active: boolean): Promise<void>;
+  delete(alertId: number): Promise<void>;
 }
 
 /** Offers (by `iddetalle`) the collector has already processed. */
@@ -52,7 +80,7 @@ export interface NotificationRepository {
 
 export interface Repositories {
   teachers: TeacherRepository;
-  criteria: CriteriaRepository;
+  alerts: AlertRepository;
   seenOffers: SeenOfferRepository;
   notifications: NotificationRepository;
 }

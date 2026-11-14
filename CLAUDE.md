@@ -81,7 +81,7 @@ Devuelve `[{estado, iddetalle, idoferta, ...}]`. Sirve para saber si una oferta 
 
 ### Problemas conocidos
 
-- **Encoding**: la API probablemente responde en **Latin-1 / Windows-1252** sin declararlo, y al leerla como UTF-8 aparece `�` (`2�B`, `ca�uelas`, `TECNOL�GICO`). La web oficial muestra bien los acentos. En el collector, leer la respuesta como bytes y decodificar con `new TextDecoder('windows-1252')` (verificar con un test que `cursodivision` quede `2°B`). Si al final la API devuelve `�` literal, el dato ya viene roto y solo queda normalizar.
+- **Encoding**: la API responde en **Windows-1252** sin declararlo (confirmado con iconv), y al leerla como UTF-8 aparece `�` (`2�B`, `ca�uelas`, `TECNOL�GICO`). La web oficial muestra bien los acentos. En el collector, leer la respuesta como bytes y decodificar con `new TextDecoder('windows-1252')` (verificar con un test que `cursodivision` quede `2°B`). Si al final la API devuelve `�` literal, el dato ya viene roto y solo queda normalizar.
 - Los horarios por día no siguen un formato fijo.
 - La API no es oficial ni está documentada. Consultar con baja frecuencia (cada 15–30 min), con un User-Agent identificable, timeouts, reintentos con backoff y tolerancia a cambios de esquema (validar con zod o similar).
 
@@ -93,7 +93,7 @@ src/
   matcher/     lógica pura: (Oferta, Criterios) -> boolean. Sin I/O, 100% testeable
   notifier/    formateo del mensaje + envío por Telegram
   bot/         comandos y conversaciones de grammY
-  db/          repositorios: docentes, criterios, ofertas_vistas, notificaciones_enviadas
+  db/          repositorios: docentes, alertas (N por docente), ofertas_vistas, notificaciones_enviadas
   scheduler.ts ciclo: collect -> guardar nuevas -> match -> notify
   index.ts
 ```
@@ -103,8 +103,14 @@ Flujo de cada ciclo:
 2. Upsert por `iddetalle`; quedarse con las nuevas.
 3. Para cada oferta nueva y cada docente activo, si hay match y no existe ya (docente, iddetalle) en `notificaciones_enviadas`, enviar el aviso y registrarlo.
 
-### Criterios por docente (v1)
+### Alertas por docente (v1)
 
+Cada docente puede tener **varias alertas** (relación docente 1—N alertas, tope configurable `MAX_ALERTS_PER_USER`; piloto: **3**). Ejemplo: "Historia · Tandil · Mañana" y "Geografía · Ayacucho y Rauch · Tarde".
+- Dentro de una alerta, cada campo acepta varios valores y se combinan con OR (Tandil **o** Ayacucho); entre campos, AND (distrito **y** área **y** turno).
+- Si una oferta coincide con dos alertas del mismo docente, se avisa **una sola vez** (dedup por `(docente, iddetalle)`), indicando qué alerta(s) coincidieron.
+- Cada alerta se puede ver, pausar o borrar por separado ("Mis alertas"; por voz: "borrá la de geografía").
+
+Campos de una alerta:
 - Distritos (uno o varios)
 - Niveles/modalidades
 - Cargos/áreas (por `areaincumbencia` o texto)
@@ -146,28 +152,35 @@ v2 opcional: Telegram Mini App (formulario web dentro de Telegram) para la carga
 2. Collector + normalización, con tests sobre `fixtures/oferta-publicada.json`.
 3. Matcher con tests.
 4. DB + scheduler.
-5. Bot de Telegram conversacional en texto libre (Claude con tool use) + confirmación con botón (crear el bot con @BotFather).
+5. Bot de Telegram conversacional en texto libre con intérprete propio (reglas + fuzzy sobre catálogos) + confirmación con botón (crear el bot con @BotFather).
 6. Notas de voz: transcripción (interfaz `Transcriber`).
 7. Dockerfile, CI y README.
-8. Prueba piloto en un distrito con 10–20 docentes.
+8. Prueba piloto en un distrito con 10–20 docentes. Acceso por **códigos de invitación** de un solo uso vía deep link (`t.me/<bot>?start=<codigo>`); sin código válido el bot responde "estamos en etapa de prueba" y anota en lista de espera. Tope global de usuarios configurable (`MAX_USERS`) y comando de admin (solo el chat_id de Pablo) para generar códigos y ver uso/costo.
 9. (Opcional) Menús con botones como alternativa, horarios disponibles, aviso de cambio de estado.
 
 ## Asistente conversacional (texto y voz) — pasos 5 y 6
 
 Diferencial frente a otros bots: el docente puede escribir o mandar un audio ("buscame cargos de historia en Tandil, turno mañana") y el bot lo entiende.
 
-Pipeline (no es un agente abierto; es un flujo controlado por código con tool use acotado):
-1. **Voz → texto**: Telegram entrega las notas de voz en OGG/Opus. Claude no recibe audio, así que se transcribe antes con un servicio speech-to-text (p. ej. Whisper vía API o whisper.cpp local). Encapsularlo detrás de una interfaz `Transcriber` para poder cambiar de proveedor.
-2. **Texto → intención + criterios**: Claude API (`@anthropic-ai/sdk`, modelo `claude-opus-5-5`) con tool use y `strict: true`. Herramientas:
-   - `search_offers(criteria)`: consulta Solr en el momento y devuelve las ofertas publicadas que coinciden ("¿qué hay hoy?").
-   - `propose_alert(criteria)`: propone guardar una alerta. **No guarda**: el bot muestra un resumen con botones [Confirmar] [Editar] y recién al confirmar se escribe en SQLite.
-   - `list_options(field, query)`: devuelve valores válidos de distrito/nivel/área (desde facets de Solr) para normalizar "historia" → `HTR`, "mardel" → "GENERAL PUEYRREDON".
-3. Si faltan datos (p. ej. no dijo el distrito), Claude pregunta en vez de inventar.
-4. Validar siempre el `criteria` devuelto contra el esquema (zod) y contra los valores reales antes de usarlo.
+**Decisión (2026-11-14): por ahora NO se usa la API de Claude ni ninguna API paga de LLM.** El entendimiento del lenguaje se hace con un **intérprete propio** (reglas + búsqueda aproximada sobre los catálogos). El LLM queda detrás de una interfaz opcional para más adelante.
+
+Pipeline:
+1. **Voz → texto**: Telegram entrega las notas de voz en OGG/Opus. Se transcriben con **whisper.cpp local** (gratis, sin API key, el audio no sale del servidor; rápido en Apple Silicon). Convertir a WAV 16 kHz mono con ffmpeg. Interfaz `Transcriber` para poder cambiar de proveedor.
+2. **Texto → criterios con el intérprete propio** (`src/nlu/`):
+   - Normalizar: minúsculas, sin tildes, sin signos.
+   - Buscar distritos, niveles y áreas en los catálogos (`fixtures/catalogo-*.json`, campo `normalizado`) con búsqueda aproximada (fuzzy, p. ej. Levenshtein o fuse.js) que tolere errores de tipeo/transcripción.
+   - Palabras clave: mañana→M, tarde→T, noche→N, vespertino/vespertina→T o N según corresponda, suplencia/suplente→S, provisional→P.
+   - Diccionario de sinónimos editable (`data/sinonimos.json`): "mardel"/"mar del plata"→General Pueyrredon, "mate"→Matemática, "ingles"→IGS, etc.
+   - Intenciones simples por palabras clave: crear alerta, ver mis alertas, borrar alerta ("borrá la de geografía"), buscar ahora ("¿qué hay hoy…?"), ayuda.
+   - Si falta un dato obligatorio o hay ambigüedad (dos áreas parecidas), **preguntar** con botones de opciones.
+   - Determinístico y 100 % testeable: tests con frases reales de ejemplo (incluidas transcripciones con errores).
+3. **Confirmación**: el bot muestra el resumen ("Historia · Tandil · Mañana") con [✅ Sí] [✏️ Cambiar]; recién al confirmar se guarda en SQLite.
+4. **LLM opcional (futuro)**: interfaz `LlmClient` usada solo como respaldo cuando el intérprete no entiende. Implementación candidata: Ollama local (gratis). Claude API solo si Pablo lo decide más adelante. Desactivado por defecto (`LLM_PROVIDER=none`).
 
 Reglas:
-- Los botones de la fase 1 siguen existiendo: la voz es un atajo, no reemplaza la confirmación.
-- Manejar `stop_reason` (incluido `refusal`) y usar el parámetro `fallbacks` del API.
-- No mandar a Claude datos personales de las ofertas (ya se descartan en el collector).
-- `ANTHROPIC_API_KEY` y la key de STT en `.env`.
-- Tests del módulo con respuestas de Claude simuladas (mock), sin llamar a la API en CI.
+- Voice-first: el docente configura hablando o escribiendo libre. Los botones se usan para confirmar ([✅ Sí] [✏️ Cambiar]) y como plan B si el asistente no está disponible.
+- Si en el futuro se activa un LLM, no mandarle datos personales (ya se descartan en el collector).
+- Claves (Telegram y, si algún día se usan, LLM/STT por API) solo en `.env`.
+- Tests del intérprete con frases de ejemplo; si se activa un LLM, con respuestas simuladas (mock), sin llamar a APIs en CI.
+- Costo cero: no se usa ningún LLM pago. El intérprete propio corre local y nunca en el ciclo del collector ni del matcher. Si en el futuro se activa un LLM (`LLM_PROVIDER`), poner límite por docente (p. ej. 20 mensajes/día), tope de gasto y fallback al intérprete propio.
+
