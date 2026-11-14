@@ -27,6 +27,7 @@ export const help = (maxAlerts: number): string =>
     ...EXAMPLES.map((e) => `• ${e}`),
     '',
     `Podés tener hasta ${maxAlerts} alertas a la vez.`,
+    '• «qué hay hoy en Tandil»: ver lo que hay publicado ahora',
     '• «mostrame mis alertas» o /ver: ver, pausar o borrar alertas',
     '• «borrá la de geografía»: borrar una alerta',
     '• /pausar y /reanudar: frenar o retomar todos los avisos',
@@ -39,6 +40,9 @@ export const VOICE_NOT_YET =
   '🎙️ Todavía no puedo escuchar audios, pero ya viene. Por ahora escribime qué buscás.';
 
 export const EXPIRED = 'Esa opción ya no está disponible. Contame de nuevo qué buscás y seguimos.';
+
+export const SEARCH_FAILED =
+  'No pude consultar las ofertas ahora mismo 😕. Probá de nuevo en un rato.';
 
 export const EDIT_PROMPT = 'Dale, contame de nuevo qué querés que busque.';
 export const NOTHING_CHANGED = 'Listo, no hice ningún cambio.';

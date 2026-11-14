@@ -1,6 +1,8 @@
 import { AlertLimitError, type Alert, type Repositories, type Teacher } from '../db/index.js';
 import type { Criteria } from '../matcher/index.js';
 import type { Interpretation, Interpreter, Question } from '../nlu/index.js';
+import { APD_URL, formatSearchResults } from '../notifier/format.js';
+import type { OfferSearch } from '../search/offer-search.js';
 import { alertMatchesFilter, isEmptyFilter, sameCriteria } from './alert-filter.js';
 import { esc, truncate } from './html.js';
 import * as texts from './texts.js';
@@ -8,6 +10,8 @@ import type { BotReply, Button } from './types.js';
 
 export interface BotServiceDeps {
   repos: Repositories;
+  /** Looks at what is published right now. */
+  search: OfferSearch;
   interpreter: Interpreter;
   maxAlertsPerUser: number;
   /** Fallback name for alerts saved before labels existed. */
@@ -21,7 +25,10 @@ export type Command = 'start' | 'help' | 'list' | 'pause' | 'resume' | 'leave';
 
 /** What the bot is waiting for from this chat. Lives in memory only. */
 type Pending =
-  { type: 'question'; question: Question } | { type: 'confirm'; criteria: Criteria; label: string };
+  | { type: 'question'; question: Question }
+  | { type: 'confirm'; criteria: Criteria; label: string }
+  /** The last search, so "Avisame de las nuevas" can turn it into an alert. */
+  | { type: 'search-result'; criteria: Criteria; label: string };
 
 /**
  * The bot's brain: turns messages and button taps into replies. It knows nothing about
@@ -34,6 +41,9 @@ export interface BotService {
   voice(): BotReply[];
 }
 
+/** How many offers a search shows (the rest are summarized). */
+const SEARCH_LIMIT = 5;
+
 const say = (text: string, buttons?: Button[][]): BotReply =>
   buttons ? { text, buttons } : { text };
 
@@ -41,7 +51,7 @@ const labelOf = (alert: Alert, describe: (c: Criteria) => string): string =>
   alert.label || describe(alert.criteria);
 
 export function createBotService(deps: BotServiceDeps): BotService {
-  const { repos, interpreter, maxAlertsPerUser: max, describeCriteria } = deps;
+  const { repos, interpreter, search, maxAlertsPerUser: max, describeCriteria } = deps;
   const now = deps.now ?? (() => new Date());
   const ttl = deps.pendingTtlMs ?? 30 * 60_000;
   const pending = new Map<number, { value: Pending; expiresAt: number }>();
@@ -135,6 +145,35 @@ export function createBotService(deps: BotServiceDeps): BotService {
     ];
   }
 
+  /** An alert needs a district and a subject or level; a search can be broader. */
+  const canBecomeAlert = (c: Criteria): boolean =>
+    c.districts.length > 0 && (c.areas.length > 0 || c.levels.length > 0);
+
+  async function renderSearch(
+    chatId: number,
+    criteria: Criteria,
+    label: string,
+    notes: readonly string[] = [],
+  ): Promise<BotReply[]> {
+    let found;
+    try {
+      found = await search.findMatching(criteria, SEARCH_LIMIT);
+    } catch {
+      clearPending(chatId);
+      return [say(texts.SEARCH_FAILED)];
+    }
+
+    const { text } = formatSearchResults(found.offers, found.total, label);
+    const extra = notes.map((n) => `ℹ️ ${esc(n)}`);
+    const offerAlert = canBecomeAlert(criteria);
+    if (offerAlert) setPending(chatId, { type: 'search-result', criteria, label });
+    else clearPending(chatId);
+
+    const rows: Button[][] = [[{ text: '🔗 Ver en ABC', url: APD_URL }]];
+    if (offerAlert) rows.push([{ text: '🔔 Avisame de las nuevas', data: 'mkalert' }]);
+    return [say([text, ...extra].join('\n\n'), rows)];
+  }
+
   async function renderCreate(
     teacher: Teacher,
     chatId: number,
@@ -173,6 +212,8 @@ export function createBotService(deps: BotServiceDeps): BotService {
         const buttons = result.options.map((o, i) => [{ text: truncate(o.label), data: `q:${i}` }]);
         return [say(esc(result.text), buttons.length > 0 ? buttons : undefined)];
       }
+      case 'search':
+        return renderSearch(chatId, result.criteria, result.summary, result.notes);
       case 'view':
         clearPending(chatId);
         return listReplies(teacher);
@@ -245,14 +286,35 @@ export function createBotService(deps: BotServiceDeps): BotService {
       case 'ok': {
         if (current?.type !== 'confirm') return [say(texts.EXPIRED)];
         clearPending(chatId);
+        let created: Alert;
         try {
-          await repos.alerts.create(teacher.id, current.criteria, now(), max, current.label);
+          created = await repos.alerts.create(
+            teacher.id,
+            current.criteria,
+            now(),
+            max,
+            current.label,
+          );
         } catch (error) {
           if (error instanceof AlertLimitError) return [say(texts.limitReached(max))];
           throw error;
         }
         const count = (await repos.alerts.listByTeacher(teacher.id)).length;
-        return [say(texts.created(current.label, count, max))];
+        return [
+          say(texts.created(current.label, count, max), [
+            [{ text: '🔎 Ver lo que hay ahora', data: `now:${created.id}` }],
+          ]),
+        ];
+      }
+      case 'mkalert': {
+        if (current?.type !== 'search-result') return [say(texts.EXPIRED)];
+        clearPending(chatId);
+        return renderCreate(teacher, chatId, {
+          kind: 'create',
+          criteria: current.criteria,
+          summary: current.label,
+          notes: [],
+        });
       }
       case 'edit':
         clearPending(chatId);
@@ -283,6 +345,8 @@ export function createBotService(deps: BotServiceDeps): BotService {
         await repos.alerts.setActive(alert.id, action === 'resume');
         return listReplies(teacher);
       }
+      case 'now':
+        return renderSearch(chatId, alert.criteria, labelOf(alert, describeCriteria));
       case 'del':
         return [
           say(`¿Borro esta alerta?\n<b>${label}</b>`, [

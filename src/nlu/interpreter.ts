@@ -55,6 +55,24 @@ const CREATE_WORDS = words(
 );
 const ALL_WORDS = words('todas todos');
 
+/** Asking for an alert wins over asking to look: "avisame si hay ofertas de historia". */
+const ALERT_VERBS = words(
+  'avisame avise avises avisas avisen avisar avisarme alerta alertas crear crea creame agrega agregar agregame nueva nuevo',
+);
+const OFFER_WORDS = words('oferta ofertas cargo cargos suplencia suplencias');
+const SEARCH_PHRASES = [
+  'que hay',
+  'hay algo',
+  'hay alguna',
+  'hay ofertas',
+  'hay cargos',
+  'hay suplencias',
+  'ofertas ahora',
+  'ofertas hoy',
+  'ahora hay',
+  'hoy hay',
+];
+
 /** Words that carry no criteria and are removed entirely (they also separate phrases). */
 const NOISE_WORDS = words(
   `aviso avisos cargo cargos hora horas modulo modulos materia materias trabajo trabajos laburo
@@ -487,6 +505,13 @@ export function createInterpreter({ catalog, synonyms }: InterpreterConfig): Int
     options: [],
   };
 
+  const MISSING_SEARCH: Issue = {
+    field: 'topic',
+    reason: 'missing',
+    text: '¿De qué querés ver ofertas? Decime una materia, un nivel o un distrito, por ejemplo «historia en Tandil».',
+    options: [],
+  };
+
   /** Asks the next pending question or, when nothing is left to settle, finishes. */
   function advance(state: DraftState): Interpretation {
     const [next, ...rest] = state.issues;
@@ -503,6 +528,19 @@ export function createInterpreter({ catalog, synonyms }: InterpreterConfig): Int
           ? 'Todas tus alertas'
           : describeCriteria(state.draft, catalog, state.areaLabels),
         all: state.all,
+      };
+    }
+
+    if (state.intent === 'search') {
+      const { districts, levels, areas } = state.draft;
+      if (districts.length === 0 && levels.length === 0 && areas.length === 0) {
+        return { ...MISSING_SEARCH, kind: 'question', state };
+      }
+      return {
+        kind: 'search',
+        criteria: state.draft,
+        summary: describeCriteria(state.draft, catalog, state.areaLabels),
+        notes: state.notes,
       };
     }
 
@@ -525,6 +563,17 @@ export function createInterpreter({ catalog, synonyms }: InterpreterConfig): Int
   const hasPhrase = (tokens: string[], phrase: string): boolean =>
     containsRun(tokens, phrase.split(' '));
 
+  /** "qué hay hoy en tandil", "mostrame ofertas de historia", "hay algo de inglés". */
+  function wantsSearch(tokens: string[]): boolean {
+    if (tokens.some((t) => ALERT_VERBS.has(t))) return false;
+    return (
+      SEARCH_PHRASES.some((phrase) => hasPhrase(tokens, phrase)) ||
+      // "qué ofertas hay", "cuántas suplencias hay": the words are not next to each other.
+      (tokens.includes('hay') && ['que', 'cuantas', 'cuantos'].some((t) => tokens.includes(t))) ||
+      (tokens.some((t) => VIEW_WORDS.has(t)) && tokens.some((t) => OFFER_WORDS.has(t)))
+    );
+  }
+
   function interpret(text: string, previous?: DraftState): Interpretation {
     const tokens = tokenize(text);
     // The user's own words, aligned with the tokens, so labels keep their accents.
@@ -535,6 +584,8 @@ export function createInterpreter({ catalog, synonyms }: InterpreterConfig): Int
     if (!previous) {
       if (tokens.some((t) => DELETE_WORDS.has(t))) {
         // handled below as a delete intent
+      } else if (wantsSearch(tokens)) {
+        // handled below as a search intent
       } else if (
         tokens.some((t) => VIEW_WORDS.has(t)) ||
         (tokens.includes('mis') &&
@@ -551,8 +602,18 @@ export function createInterpreter({ catalog, synonyms }: InterpreterConfig): Int
     }
 
     const intent =
-      previous?.intent ?? (tokens.some((t) => DELETE_WORDS.has(t)) ? 'delete' : 'create');
-    const extraction = extract(tokens, originals, intent, previous === undefined);
+      previous?.intent ??
+      (tokens.some((t) => DELETE_WORDS.has(t))
+        ? 'delete'
+        : wantsSearch(tokens)
+          ? 'search'
+          : 'create');
+    const extraction = extract(
+      tokens,
+      originals,
+      intent === 'delete' ? 'delete' : 'create',
+      previous === undefined,
+    );
 
     if (!previous) {
       const asksToCreate = tokens.some((t) => CREATE_WORDS.has(t));

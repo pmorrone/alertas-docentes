@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { APD_URL, formatApiDateTime, formatOffer, titleCase } from '../../src/notifier/format.js';
+import {
+  APD_URL,
+  formatApiDateTime,
+  formatOffer,
+  formatSearchResults,
+  titleCase,
+} from '../../src/notifier/format.js';
 import { makeOffer } from '../matcher/helpers.js';
 
 // The fixture offer: Maestro de Danza Primaria, ARTISTICA, PILAR, turno T, suplencia
@@ -16,7 +22,7 @@ describe('formatOffer', () => {
         '🆕 <b>Maestro de Danza Primaria (MDP)</b>, Artistica, Pilar',
         '2°B · Turno T · Suplencia del 26/10 al 24/11 · Hs/módulos: 2',
         'Vie 15 A 17',
-        '📍 Pasteur Y Tucuman (0083PP0032)',
+        '📍 Pasteur y Tucuman (0083PP0032)',
         '⏰ Cierra: 13/11 07:30',
         '🔔 Tu alerta: Danza · Pilar · Tarde',
       ].join('\n'),
@@ -93,6 +99,57 @@ describe('formatOffer', () => {
 describe('titleCase', () => {
   it('capitalizes every word', () => {
     expect(titleCase('GENERAL  PUEYRREDON')).toBe('General Pueyrredon');
-    expect(titleCase('9 DE JULIO')).toBe('9 De Julio');
+    expect(titleCase('9 DE JULIO')).toBe('9 de Julio');
+    expect(titleCase('LOMAS DE ZAMORA')).toBe('Lomas de Zamora');
+    expect(titleCase('DE LA PLATA')).toBe('De la Plata');
+  });
+});
+
+describe('formatSearchResults', () => {
+  it('lists the offers in one message under a header', () => {
+    const offers = [
+      makeOffer({ iddetalle: 1 }),
+      makeOffer({ iddetalle: 2, cargo: 'Historia (HTR)' }),
+    ];
+
+    const { text, shown } = formatSearchResults(offers, 2, 'Danza · Pilar');
+
+    expect(shown).toBe(2);
+    expect(text.startsWith('🔎 <b>2 ofertas publicadas</b> ahora para <b>Danza · Pilar</b>:')).toBe(
+      true,
+    );
+    expect(text).toContain('▫️ <b>Maestro de Danza Primaria (MDP)</b>');
+    expect(text).toContain('▫️ <b>Historia (HTR)</b>');
+    expect(text).not.toContain('🆕');
+    expect(text).not.toContain('🔔'); // there is no alert to mention
+  });
+
+  it('uses the singular and handles no results', () => {
+    expect(formatSearchResults([makeOffer()], 1, 'X').text).toContain('<b>1 oferta publicada</b>');
+    expect(formatSearchResults([], 0, 'Historia · Pilar').text).toBe(
+      '🔎 Ahora no hay ofertas publicadas para <b>Historia · Pilar</b>.',
+    );
+  });
+
+  it('says how many more there are', () => {
+    const { text } = formatSearchResults([makeOffer()], 9, 'X');
+    expect(text).toContain('… y 8 más. Las ves todas en el sitio de APD.');
+  });
+
+  it('stays under the Telegram limit by showing fewer offers', () => {
+    const many = Array.from({ length: 20 }, (_, i) =>
+      makeOffer({ iddetalle: i + 1, observaciones: 'x'.repeat(190) }),
+    );
+
+    const { text, shown } = formatSearchResults(many, 20, 'X');
+
+    expect(text.length).toBeLessThan(4096);
+    expect(shown).toBeGreaterThan(0);
+    expect(shown).toBeLessThan(20);
+    expect(text).toContain(`… y ${20 - shown} más`);
+  });
+
+  it('escapes the label', () => {
+    expect(formatSearchResults([], 0, '<b>').text).toContain('&lt;b&gt;');
   });
 });

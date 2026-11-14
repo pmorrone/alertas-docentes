@@ -8,7 +8,10 @@ import {
   type Db,
   type Repositories,
 } from '../../src/db/index.js';
+import type { Criteria } from '../../src/matcher/index.js';
 import { describeCriteria } from '../../src/nlu/index.js';
+import type { OfferSearch, SearchResult } from '../../src/search/offer-search.js';
+import { makeOffer } from '../matcher/helpers.js';
 import { catalog, interpreter } from '../nlu/helpers.js';
 
 const CHAT = 1001;
@@ -16,9 +19,20 @@ const OTHER_CHAT = 2002;
 
 const textOf = (replies: BotReply[]): string => replies.map((r) => r.text).join('\n');
 const dataOf = (replies: BotReply[]): string[] =>
-  replies.flatMap((r) => (r.buttons ?? []).flat().map((b) => b.data));
+  replies.flatMap((r) => (r.buttons ?? []).flat().flatMap((b) => ('data' in b ? [b.data] : [])));
 const buttonLabels = (replies: BotReply[]): string[] =>
   replies.flatMap((r) => (r.buttons ?? []).flat().map((b) => b.text));
+
+/** Controllable stand-in for the province-wide search. */
+let searchResult: SearchResult | Error;
+const searched: { criteria: Criteria; limit: number }[] = [];
+const fakeSearch: OfferSearch = {
+  findMatching: async (criteria, limit) => {
+    searched.push({ criteria, limit });
+    if (searchResult instanceof Error) throw searchResult;
+    return { total: searchResult.total, offers: searchResult.offers.slice(0, limit) };
+  },
+};
 
 describe('bot service', () => {
   let db: Db;
@@ -27,11 +41,14 @@ describe('bot service', () => {
   let clock: number;
 
   beforeEach(() => {
+    searchResult = { total: 0, offers: [] };
+    searched.length = 0;
     db = openDatabase(':memory:');
     repos = createSqliteRepositories(db);
     clock = Date.parse('2026-11-14T12:00:00Z');
     service = createBotService({
       repos,
+      search: fakeSearch,
       interpreter,
       maxAlertsPerUser: 3,
       describeCriteria: (c) => describeCriteria(c, catalog),
@@ -304,6 +321,128 @@ describe('bot service', () => {
 
       expect(textOf(await service.callback(CHAT, 'cancel'))).toContain('no hice ningún cambio');
       expect(await alertsOf()).toHaveLength(1);
+    });
+  });
+
+  describe('searching what is published now', () => {
+    const urlsOf = (replies: BotReply[]): string[] =>
+      replies.flatMap((r) => (r.buttons ?? []).flat().flatMap((b) => ('url' in b ? [b.url] : [])));
+
+    it('answers "qué hay hoy en tandil" with the offers, without saving anything', async () => {
+      searchResult = {
+        total: 2,
+        offers: [makeOffer({ iddetalle: 1 }), makeOffer({ iddetalle: 2 })],
+      };
+
+      const replies = await service.text(CHAT, 'qué hay hoy en tandil');
+
+      expect(replies).toHaveLength(1);
+      expect(textOf(replies)).toContain('2 ofertas publicadas');
+      expect(textOf(replies)).toContain('Tandil');
+      expect(textOf(replies)).toContain('Maestro de Danza Primaria (MDP)');
+      expect(searched[0]?.criteria.districts).toEqual(['tandil']);
+      expect(searched[0]?.limit).toBe(5);
+      expect(urlsOf(replies)).toEqual([
+        'https://misservicios.abc.gob.ar/actos.publicos.digitales/',
+      ]);
+      expect(await alertsOf()).toHaveLength(0);
+    });
+
+    it('says so when nothing is published', async () => {
+      const replies = await service.text(CHAT, 'qué hay de historia en pilar');
+      expect(textOf(replies)).toContain('Ahora no hay ofertas publicadas');
+    });
+
+    it('summarizes the offers that do not fit', async () => {
+      searchResult = {
+        total: 12,
+        offers: Array.from({ length: 5 }, (_, i) => makeOffer({ iddetalle: i + 1 })),
+      };
+
+      const replies = await service.text(CHAT, 'hay algo de historia en pilar');
+
+      expect(textOf(replies)).toContain('12 ofertas publicadas');
+      expect(textOf(replies)).toContain('… y 7 más');
+    });
+
+    it('asks what to look for when the request is empty', async () => {
+      const question = await service.text(CHAT, 'qué hay');
+      expect(textOf(question)).toContain('¿De qué querés ver ofertas?');
+      expect(searched).toHaveLength(0);
+
+      const replies = await service.text(CHAT, 'en pilar');
+      expect(textOf(replies)).toContain('Pilar');
+      expect(searched).toHaveLength(1);
+    });
+
+    it('works for ambiguous requests through the buttons too', async () => {
+      const question = await service.text(CHAT, 'qué hay de ciencias en tandil');
+      expect(textOf(question)).toContain('puede ser varias cosas');
+
+      const index = buttonLabels(question).indexOf('Ciencias naturales');
+      const replies = await service.callback(CHAT, `q:${index}`);
+
+      expect(searched[0]?.criteria.areas).toEqual(['cnt']);
+      expect(textOf(replies)).toContain('Ciencias naturales');
+    });
+
+    it('turns a complete search into an alert with one tap', async () => {
+      const results = await service.text(CHAT, 'qué hay de historia en pilar');
+      expect(dataOf(results)).toEqual(['mkalert']);
+
+      const confirm = await service.callback(CHAT, 'mkalert');
+      expect(textOf(confirm)).toContain('Historia · Pilar');
+      expect(dataOf(confirm)).toEqual(['ok', 'edit']);
+
+      await service.callback(CHAT, 'ok');
+      expect(await alertsOf()).toHaveLength(1);
+    });
+
+    it('does not offer an alert when the search is too broad to be one', async () => {
+      const results = await service.text(CHAT, 'qué hay en tandil'); // no subject or level
+      expect(dataOf(results)).toEqual([]);
+      expect(textOf(await service.callback(CHAT, 'mkalert'))).toContain('ya no está disponible');
+    });
+
+    it('lets you look at the current offers right after creating an alert', async () => {
+      searchResult = { total: 1, offers: [makeOffer()] };
+      await service.text(CHAT, 'historia en pilar a la tarde');
+      const created = await service.callback(CHAT, 'ok');
+      const [alert] = await alertsOf();
+      expect(dataOf(created)).toEqual([`now:${alert!.id}`]);
+
+      const replies = await service.callback(CHAT, `now:${alert!.id}`);
+
+      expect(textOf(replies)).toContain('1 oferta publicada');
+      expect(textOf(replies)).toContain('Historia · Pilar · Tarde');
+      expect(searched[0]?.criteria).toEqual(alert!.criteria);
+    });
+
+    it("does not run another teacher's alert", async () => {
+      await createAlert('historia en pilar', CHAT);
+      const [alert] = await alertsOf(CHAT);
+      await service.command(OTHER_CHAT, 'start');
+
+      const reply = await service.callback(OTHER_CHAT, `now:${alert!.id}`);
+
+      expect(textOf(reply)).toContain('ya no está disponible');
+      expect(searched).toHaveLength(0);
+    });
+
+    it('apologizes when the offers cannot be fetched, and keeps working', async () => {
+      searchResult = new Error('api down');
+      expect(textOf(await service.text(CHAT, 'qué hay en tandil'))).toContain(
+        'No pude consultar las ofertas',
+      );
+
+      searchResult = { total: 0, offers: [] };
+      expect(textOf(await service.text(CHAT, 'qué hay en tandil'))).toContain('Ahora no hay');
+    });
+
+    it('still creates alerts for "avisame si hay ofertas" (it is not a search)', async () => {
+      const replies = await service.text(CHAT, 'avisame si hay ofertas de historia en pilar');
+      expect(dataOf(replies)).toEqual(['ok', 'edit']);
+      expect(searched).toHaveLength(0);
     });
   });
 

@@ -29,7 +29,7 @@ export interface Issue {
  * bot can keep it in memory or serialize it between messages.
  */
 export interface DraftState {
-  intent: 'create' | 'delete';
+  intent: 'create' | 'delete' | 'search';
   draft: Criteria;
   /** Readable names of the draft's areas ("Historia"), for the summary. */
   areaLabels: string[];
@@ -66,6 +66,15 @@ export interface DeleteIntent {
   all: boolean;
 }
 
+/** "¿Qué hay hoy en Tandil?": look at what is published right now, without saving anything. */
+export interface SearchIntent {
+  kind: 'search';
+  criteria: Criteria;
+  /** Short description of what is being looked up, e.g. "Historia · Tandil". */
+  summary: string;
+  notes: string[];
+}
+
 export interface ViewIntent {
   kind: 'view';
 }
@@ -80,7 +89,7 @@ export interface UnknownIntent {
 }
 
 export type Interpretation =
-  CreateIntent | DeleteIntent | ViewIntent | HelpIntent | UnknownIntent | Question;
+  CreateIntent | DeleteIntent | SearchIntent | ViewIntent | HelpIntent | UnknownIntent | Question;
 
 export interface Interpreter {
   /**

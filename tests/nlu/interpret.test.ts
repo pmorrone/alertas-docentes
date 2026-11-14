@@ -314,6 +314,60 @@ describe('other intents', () => {
   });
 });
 
+describe('search intent ("what is there right now")', () => {
+  it.each([
+    'qué hay hoy en tandil',
+    'hay algo de historia en tandil',
+    'mostrame ofertas de historia en tandil',
+    'ver las ofertas en tandil',
+    'qué ofertas hay en tandil',
+  ])('"%s" is a search', (text) => {
+    expect(interpret(text).kind).toBe('search');
+  });
+
+  it('carries the same criteria and summary as an alert would', () => {
+    const result = interpret('qué hay hoy de historia en pilar a la tarde');
+    expect(result).toMatchObject({
+      kind: 'search',
+      summary: 'Historia · Pilar · Tarde',
+      criteria: { districts: ['pilar'], areas: ['htr', 'h.i'], shifts: ['T'] },
+    });
+  });
+
+  it('does not require a district: a search can be broad', () => {
+    expect(interpret('qué hay de historia')).toMatchObject({
+      kind: 'search',
+      criteria: { districts: [], areas: ['htr', 'h.i'] },
+    });
+  });
+
+  it('asks what to look for when nothing was said, then completes with the answer', () => {
+    const question = expectQuestion(interpret('qué hay hoy'));
+    expect(question).toMatchObject({ field: 'topic', reason: 'missing' });
+
+    const result = interpreter.interpret('inglés en rauch', question.state);
+    expect(result).toMatchObject({ kind: 'search', criteria: { districts: ['rauch'] } });
+  });
+
+  it('asks the usual questions when the subject is ambiguous', () => {
+    const question = expectQuestion(interpret('qué hay de ciencias en tandil'));
+    expect(question.field).toBe('area');
+    const index = question.options.findIndex((o) => o.label === 'Ciencias naturales');
+    expect(interpreter.answer(question, index)).toMatchObject({
+      kind: 'search',
+      criteria: { areas: ['cnt'] },
+    });
+  });
+
+  it('does not steal other intents', () => {
+    expect(interpret('avisame si hay ofertas de historia en pilar').kind).toBe('create');
+    expect(interpret('buscame cargos de historia en tandil').kind).toBe('create');
+    expect(interpret('mostrame mis alertas').kind).toBe('view');
+    expect(interpret('qué alertas tengo').kind).toBe('view');
+    expect(interpret('borrá la alerta de historia').kind).toBe('delete');
+  });
+});
+
 describe('output is always valid matcher criteria', () => {
   it('produces normalized, deduplicated criteria', () => {
     const result = expectCreate(interpret('historia historia en Pilar pilar tarde tarde'));

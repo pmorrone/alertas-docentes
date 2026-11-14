@@ -9,11 +9,13 @@ import { TelegramNotifier } from './notifier/telegram-notifier.js';
 import type { Notifier } from './notifier/types.js';
 import { describeCriteria, loadCatalog, loadInterpreter } from './nlu/index.js';
 import { runCycle, startScheduler } from './scheduler.js';
+import { createOfferSearch } from './search/offer-search.js';
 
 const config = loadConfig();
 const db = openDatabase(config.dbPath);
 const repos = createSqliteRepositories(db);
 const catalog = loadCatalog();
+const collector = new SolrClient();
 const describe = (criteria: Parameters<typeof describeCriteria>[0]): string =>
   describeCriteria(criteria, catalog);
 
@@ -23,6 +25,7 @@ let stopBot: () => Promise<void> = async () => undefined;
 if (config.telegramBotToken) {
   const service = createBotService({
     repos,
+    search: createOfferSearch({ collector }),
     interpreter: loadInterpreter(),
     maxAlertsPerUser: config.maxAlertsPerUser,
     describeCriteria: describe,
@@ -46,7 +49,7 @@ const scheduler = startScheduler({
   intervalMs: config.pollIntervalMin * 60_000,
   logger,
   cycle: async () => {
-    const report = await runCycle({ collector: new SolrClient(), repos, notifier, logger });
+    const report = await runCycle({ collector, repos, notifier, logger });
     logger.info(`cycle done: ${JSON.stringify(report)}`);
   },
 });
