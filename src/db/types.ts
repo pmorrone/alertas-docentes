@@ -14,6 +14,8 @@ export interface Alert {
   id: number;
   teacherId: number;
   criteria: Criteria;
+  /** Readable name, e.g. "Historia · Pilar · Tarde". Empty for alerts created before labels existed. */
+  label: string;
   /** False while this single alert is paused (independent of the teacher's global pause). */
   active: boolean;
   createdAt: Date;
@@ -54,7 +56,13 @@ export interface AlertRepository {
    * Adds an alert (active). Paused alerts count toward the limit.
    * @throws AlertLimitError when the teacher already has `maxAlerts`.
    */
-  create(teacherId: number, criteria: Criteria, now: Date, maxAlerts: number): Promise<Alert>;
+  create(
+    teacherId: number,
+    criteria: Criteria,
+    now: Date,
+    maxAlerts: number,
+    label?: string,
+  ): Promise<Alert>;
   /** All of the teacher's alerts, paused or not, oldest first. */
   listByTeacher(teacherId: number): Promise<Alert[]>;
   find(alertId: number): Promise<Alert | undefined>;

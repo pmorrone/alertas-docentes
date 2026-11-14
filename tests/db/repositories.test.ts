@@ -101,11 +101,27 @@ describe('sqlite repositories', () => {
         id: a1.id,
         teacherId: t.id,
         criteria: c1,
+        label: '',
         active: true,
         createdAt: NOW,
       });
       expect(await repos.alerts.listByTeacher(t.id)).toEqual([a1, a2]);
       expect(await repos.alerts.find(a2.id)).toEqual(a2);
+    });
+
+    it('stores the readable label and keeps it when listing for the scheduler', async () => {
+      const t = await repos.teachers.upsertByChatId(1, NOW);
+      const alert = await repos.alerts.create(
+        t.id,
+        createCriteria({ areas: ['htr'] }),
+        NOW,
+        3,
+        'Historia · Pilar',
+      );
+
+      expect(alert.label).toBe('Historia · Pilar');
+      const [entry] = await repos.teachers.listActiveWithAlerts();
+      expect(entry?.alerts[0]?.label).toBe('Historia · Pilar');
     });
 
     it('enforces the per-teacher limit, counting paused alerts, per teacher', async () => {
@@ -202,7 +218,7 @@ describe('openDatabase', () => {
     const db2 = openDatabase(path);
     const found = await createSqliteRepositories(db2).teachers.findByChatId(42);
     expect(found?.telegramChatId).toBe(42);
-    expect(db2.pragma('user_version', { simple: true })).toBe(2);
+    expect(db2.pragma('user_version', { simple: true })).toBe(3);
     db2.close();
   });
 });
@@ -228,11 +244,12 @@ describe('migrations', () => {
         id: 1,
         teacherId: 1,
         criteria,
+        label: '',
         active: true,
         createdAt: new Date('2026-11-02T00:00:00Z'),
       },
     ]);
-    expect(db.pragma('user_version', { simple: true })).toBe(2);
+    expect(db.pragma('user_version', { simple: true })).toBe(3);
     expect(
       db.prepare("SELECT name FROM sqlite_master WHERE name = 'criteria'").get(),
     ).toBeUndefined();
