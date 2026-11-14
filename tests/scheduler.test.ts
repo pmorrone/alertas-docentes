@@ -38,7 +38,7 @@ describe('runCycle', () => {
 
   async function addTeacher(chatId: number, criteria: Criteria = createCriteria({})) {
     const teacher = await repos.teachers.upsertByChatId(chatId, NOW);
-    await repos.criteria.save(teacher.id, criteria, NOW);
+    await repos.alerts.create(teacher.id, criteria, NOW, 3);
     return teacher;
   }
 
@@ -94,16 +94,80 @@ describe('runCycle', () => {
     expect(await repos.notifications.wasSent(pilar.id, 2)).toBe(true);
   });
 
-  it('does not alert paused teachers or teachers without criteria', async () => {
+  it('does not alert paused teachers or teachers without alerts', async () => {
     const paused = await addTeacher(1);
     await repos.teachers.setActive(paused.id, false);
-    await repos.teachers.upsertByChatId(2, NOW); // no criteria
+    await repos.teachers.upsertByChatId(2, NOW); // no alerts
     await establishBaseline();
     published = [...published, makeOffer({ iddetalle: 2, ...OPEN })];
 
     await runCycle(deps());
 
     expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('sends a single alert when several alerts of one teacher match, listing them', async () => {
+    const teacher = await repos.teachers.upsertByChatId(1, NOW);
+    const district = await repos.alerts.create(
+      teacher.id,
+      createCriteria({ districts: ['Pilar'] }),
+      NOW,
+      3,
+    );
+    const area = await repos.alerts.create(teacher.id, createCriteria({ areas: ['mdp'] }), NOW, 3);
+    await repos.alerts.create(teacher.id, createCriteria({ districts: ['Tandil'] }), NOW, 3);
+    await establishBaseline();
+    published = [...published, makeOffer({ iddetalle: 2, ...OPEN })]; // PILAR, MDP
+
+    const report = await runCycle(deps());
+
+    expect(report.sent).toBe(1);
+    expect(notify).toHaveBeenCalledTimes(1);
+    const matched = notify.mock.calls[0]?.[2];
+    expect(matched?.map((a) => a.id)).toEqual([district.id, area.id]);
+  });
+
+  it('ignores paused alerts and alerts of other offers', async () => {
+    const teacher = await repos.teachers.upsertByChatId(1, NOW);
+    const pausedAlert = await repos.alerts.create(
+      teacher.id,
+      createCriteria({ districts: ['Pilar'] }),
+      NOW,
+      3,
+    );
+    const live = await repos.alerts.create(
+      teacher.id,
+      createCriteria({ districts: ['Pilar'], shifts: ['T'] }),
+      NOW,
+      3,
+    );
+    await repos.alerts.setActive(pausedAlert.id, false);
+    await establishBaseline();
+    published = [...published, makeOffer({ iddetalle: 2, ...OPEN })];
+
+    await runCycle(deps());
+
+    expect(notify.mock.calls[0]?.[2].map((a) => a.id)).toEqual([live.id]);
+  });
+
+  it('alerts a teacher about different offers through different alerts', async () => {
+    const teacher = await repos.teachers.upsertByChatId(1, NOW);
+    await repos.alerts.create(teacher.id, createCriteria({ districts: ['Pilar'] }), NOW, 3);
+    await repos.alerts.create(teacher.id, createCriteria({ districts: ['Tandil'] }), NOW, 3);
+    await establishBaseline();
+    published = [
+      ...published,
+      makeOffer({ iddetalle: 2, ...OPEN }),
+      makeOffer({ iddetalle: 3, descdistrito: 'TANDIL', ...OPEN }),
+    ];
+
+    const report = await runCycle(deps());
+
+    expect(report.sent).toBe(2);
+    expect(notify.mock.calls.map(([, o, alerts]) => [o.id, alerts.length])).toEqual([
+      [2, 1],
+      [3, 1],
+    ]);
   });
 
   it('does not alert about offers that are not Publicada', async () => {

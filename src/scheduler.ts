@@ -66,7 +66,7 @@ export async function runCycle(deps: CycleDeps): Promise<CycleReport> {
     return report;
   }
 
-  const recipients = await repos.teachers.listActiveWithCriteria();
+  const recipients = await repos.teachers.listActiveWithAlerts();
   const unreachable = new Set<number>();
   const processed: number[] = [];
 
@@ -80,12 +80,15 @@ export async function runCycle(deps: CycleDeps): Promise<CycleReport> {
 
   async function notifyMatching(offer: Offer): Promise<boolean> {
     let fullyServed = true;
-    for (const { teacher, criteria } of recipients) {
-      if (unreachable.has(teacher.id) || !matches(offer, criteria)) continue;
+    for (const { teacher, alerts } of recipients) {
+      if (unreachable.has(teacher.id)) continue;
+      // One alert per (teacher, offer), even when several of their alerts match.
+      const matched = alerts.filter((alert) => matches(offer, alert.criteria));
+      if (matched.length === 0) continue;
       if (await repos.notifications.wasSent(teacher.id, offer.id)) continue;
 
       try {
-        await notifier.notify(teacher, offer);
+        await notifier.notify(teacher, offer, matched);
       } catch (error) {
         if (error instanceof RecipientUnavailableError) {
           unreachable.add(teacher.id);

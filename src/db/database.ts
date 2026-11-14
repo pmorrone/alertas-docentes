@@ -32,11 +32,28 @@ const MIGRATIONS: readonly string[] = [
     PRIMARY KEY (teacher_id, offer_id)
   );
   `,
+  // Multiple alerts per teacher. The old single-criteria rows become one alert each.
+  `
+  CREATE TABLE alerts (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    teacher_id INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+    data       TEXT NOT NULL,
+    active     INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX alerts_teacher_idx ON alerts(teacher_id);
+
+  INSERT INTO alerts (teacher_id, data, active, created_at)
+    SELECT teacher_id, data, 1, updated_at FROM criteria ORDER BY teacher_id;
+
+  DROP TABLE criteria;
+  `,
 ];
 
-export function migrate(db: Db): void {
+/** Applies pending migrations, optionally stopping at `target` (used to test upgrades). */
+export function migrate(db: Db, target: number = MIGRATIONS.length): void {
   const current = db.pragma('user_version', { simple: true }) as number;
-  for (let version = current; version < MIGRATIONS.length; version++) {
+  for (let version = current; version < target; version++) {
     db.transaction(() => {
       db.exec(MIGRATIONS[version] as string);
       db.pragma(`user_version = ${version + 1}`);
